@@ -19,12 +19,28 @@ jobs:
         with:
           node-version: 16
 
-      - name: Generate Random String
-        id: random_string
-        run: echo "::set-output name=random_string::$(openssl rand -hex 16)"
+      - name: Determine App File Paths
+        id: app_files
+        run: |
+          if [ -n "$(find . -type f -name '*.exe')" ]; then
+            echo "::set-output name=windows_file::$(find . -type f -name '*.exe')"
+          fi
+          if [ -n "$(find . -type f -name '*.dmg')" ]; then
+            echo "::set-output name=mac_file::$(find . -type f -name '*.dmg')"
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files:
+            windows: ${{ steps.app_files.outputs.windows_file }}
+            mac: ${{ steps.app_files.outputs.mac_file }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build/release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
-          github_token: ${{ secrets.github_token }}
-          release: ${{ steps.random_string.outputs.random_string }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release: ${{ steps.create_release.outputs.upload_url }}
