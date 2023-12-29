@@ -1,6 +1,9 @@
 name: Build & Release
 
-on: push
+on:
+  push:
+    branches:
+      - release # Trigger only on push to the release branch
 
 jobs:
   release:
@@ -19,13 +22,14 @@ jobs:
         with:
           node-version: 18
 
+      - name: Generate random tag from commit
+        id: randomtag
+        run: echo "::set-output name=TAG::$(echo ${{ github.sha }} | md5sum | head -c 8)" # Generate an 8 character tag
+
       - name: Build/release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
-          # GitHub token, automatically provided to the action
-          # (No need to define this secret in the repo settings)
           github_token: ${{ secrets.GITHUB_TOKEN }}
-
-          # If the commit is tagged with a version (e.g. "v1.0.0"),
-          # release the app after building
-          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          release: true
+          # Set the tag to the generated random string
+          tag: ${{ steps.randomtag.outputs.TAG }}
