@@ -25,5 +25,5 @@
   - High-refresh rate and reliable audio visualizer for precise sound representation,
   - Supports global shortcuts (Ctrl + Alt + Insert / Ctrl + Alt + H),
   - Capable of handling title metadata for compatible streams,
-  - Fully compatible with Icecast 2 streams,
+  - Compatible with all HTTP streaming servers,
   - Available for Windows, MacOS & Linux.
