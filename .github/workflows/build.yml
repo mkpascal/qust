@@ -53,13 +53,28 @@ jobs:
       - name: Upload Release Assets
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $retries = 3
+          $retryInterval = 5
+          $uploadUrl = "${{ steps.create_release.outputs.upload_url }}"
           Get-ChildItem dist/* -Include *.zip, *.exe, *.dmg | ForEach-Object {
             $asset = $_.FullName
-            Write-Host "Uploading $asset"
-            Invoke-RestMethod `
-              -Method Post `
-              -Headers @{ "Authorization" = "token ${{ secrets.github_token }}" } `
-              -ContentType "application/octet-stream" `
-              -InFile $asset `
-              -Uri "${{ steps.create_release.outputs.upload_url }}?name=$($_.Name)"
+            $retryCount = 0
+            $uploaded = $false
+            while (-not $uploaded -and $retryCount -lt $retries) {
+              try {
+                Write-Host "Uploading $asset"
+                Invoke-RestMethod -Method Post -Headers @{ "Authorization" = "Bearer ${{ secrets.github_token }}" } -ContentType "application/octet-stream" -InFile $asset -Uri "$uploadUrl?name=$($_.Name)"
+                $uploaded = $true
+                Write-Host "Uploaded $asset"
+              } catch {
+                Write-Host "Failed to upload $asset. Retrying in $retryInterval seconds..."
+                Start-Sleep -Seconds $retryInterval
+                $retryCount++
+              }
+            }
+            if (-not $uploaded) {
+              Write-Host "Failed to upload $asset after $retries retries."
+              exit 1
+            }
           }
