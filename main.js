@@ -26,7 +26,7 @@ const createWindow = () => {
   mainWindow.loadFile('index.html')
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools()
+  //mainWindow.webContents.openDevTools()
 
   globalShortcut.register('Ctrl+Alt+Insert', () => {
     mainWindow.webContents.send('play-action')
