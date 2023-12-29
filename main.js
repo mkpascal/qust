@@ -10,7 +10,7 @@ const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 980,
-    height: 325,
+    height: 322,
     title: "Qust",
     resizable: false,
     webPreferences: {

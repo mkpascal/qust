@@ -67,13 +67,15 @@ function start(){
             .catch(error => console.error(error));
     }, 15000);
 
+    audio.load();
     audio.play();
 }
 
 function stop(){
     changeVisibilityOfNowPlaying('hidden');
     clearInterval(intervalId);
-    audio.pause()
+    audio.pause();
+    audio.currentTime = 0;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -129,9 +131,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         changeCardStatusText("<b>Now playing:</b> " + titleP + " - " + urlP);
 
-                        // getMetaDataFromStream(urlP)
-                        // .then(title => console.log('Current Title:', title))
-                        // .catch(error => console.error(error));
+                        saveData('last-selected-player', CBplayer);
+                        saveData('last-selected-title', titleP);
+                        saveData('last-selected-url', urlP);                
 
                         audioPlayer.load();
                         
@@ -256,6 +258,55 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error(`Error loading ${key}:`, error);
         }
     }
+
+
+    const lastVariablesList = ['last-selected-player', 'last-selected-title', 'last-selected-url'];
+
+    for (const key of lastVariablesList) {
+        try {
+            const data = await loadData(key);
+
+
+            if (typeof data !== 'undefined') {
+                console.log(key);
+                console.log(data);
+
+                
+                if (key.includes("-player")){
+                    var playerDiv = document.querySelector('.' + data);
+                    
+                    if (playerDiv) {
+                        playerDiv.classList.remove('text-bg-secondary');
+                        playerDiv.classList.remove('text-bg-warning');
+                        playerDiv.classList.add('text-bg-success');
+                    }
+                }
+
+                if (key.includes("-title")){
+                    changeCardStatusText("<b>To start, press play or select a different stream.</b>");
+
+                    titleP = data;
+                }
+
+                if (key.includes("-url")){
+                    var audioPlayer = document.getElementById('audio');
+                    audioPlayer.src = data;
+                    audioPlayer.load();
+
+                    urlP = data;
+                }
+                
+
+            } else {
+            }
+        } catch (error) {
+            console.error(`Error loading ${key}:`, error);
+        }
+    }
+
+
+
+
 });
 
 document.addEventListener("DOMContentLoaded", function() {
