@@ -1,9 +1,6 @@
-name: Build & Release
+name: Build/release
 
-on:
-  push:
-    branches:
-      - release
+on: push
 
 jobs:
   release:
@@ -11,54 +8,23 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v2
 
-      - name: Setup Node.js
+      - name: Install Node.js, NPM and Yarn
         uses: actions/setup-node@v2
         with:
-          node-version: 18
+          node-version: 16
 
-      - name: Generate Tag from Commit SHA
-        run: echo "RELEASE_TAG=v$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          release_name: Release ${{ env.RELEASE_TAG }}
-          draft: false
-          prerelease: false
+      - name: Generate Random String
+        id: random_string
+        run: echo "::set-output name=random_string::$(openssl rand -hex 16)"
 
       - name: Build/release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: false
-
-      - name: Find Artifact
-        id: find_artifact
-        run: |
-          if [ ${{ matrix.os }} == 'windows-latest' ]; then
-            ARTIFACT_PATH=$(find . -name "*.exe")
-            echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> $GITHUB_ENV
-          elif [ ${{ matrix.os }} == 'macos-latest' ]; then
-            ARTIFACT_PATH=$(find . -name "*.dmg")
-            echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> $GITHUB_ENV
-          fi
-
-      - name: Upload Artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ env.ARTIFACT_PATH }}
-          asset_name: ${{ github.run_id }}-${{ matrix.os }}-artifact
-          asset_content_type: application/octet-stream
+          github_token: ${{ secrets.github_token }}
+          release: ${{ steps.random_string.outputs.random_string }}
