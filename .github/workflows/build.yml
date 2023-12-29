@@ -22,5 +22,40 @@ jobs:
       - name: Build/release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: rel-${{ github.sha }}-${{ matrix.os }}-${{ github.run_number }}
+          github_token: ${{ secrets.github_token }}
+          release: true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: electron-build-artifact-${{ matrix.os }}
+          path: |
+            dist/**/*.zip
+            dist/**/*.exe
+            dist/**/*.dmg
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
+        with:
+          tag_name: release-${{ github.sha }}-${{ matrix.os }}-${{ github.run_number }}
+          release_name: Release-${{ github.sha }}-${{ matrix.os }}-${{ github.run_number }}
+          draft: false
+          prerelease: false
+          body: "Release of commit ${{ github.sha }} on ${{ matrix.os }}"
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: electron-build-artifact-${{ matrix.os }}
+
+      - name: Upload Release Assets
+        run: |
+          for file in dist/*.{zip,exe,dmg}; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file"
+              curl -X POST -H "Authorization: token ${{ secrets.github_token }}" -H "Content-Type: $(file -b --mime-type $file)" --data-binary @$file ${{ steps.create_release.outputs.upload_url }}?name=$(basename $file)
+            fi
+          done
