@@ -61,6 +61,8 @@ function start(){
     renderFrame();
     changeVisibilityOfNowPlaying('visible');
 
+    changeCardStatusText("<b>Now playing:</b> " + titleP + " (" + urlP + ")");
+
     intervalId = setInterval(function() {
         getMetaDataFromStream(urlP)
             .then(title => changeCardStatusText("<b>Now playing:</b> " + title + " (" + titleP + ")"))
@@ -74,6 +76,7 @@ function start(){
 function stop(){
     changeVisibilityOfNowPlaying('hidden');
     clearInterval(intervalId);
+    changeCardStatusText("<b>Stopped.</b>");
     audio.pause();
     audio.currentTime = 0;
 }
@@ -128,8 +131,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         var audioPlayer = document.getElementById('audio');
                         audioPlayer.src = urlP;
-
-                        changeCardStatusText("<b>Now playing:</b> " + titleP + " - " + urlP);
 
                         saveData('last-selected-player', CBplayer);
                         saveData('last-selected-title', titleP);
