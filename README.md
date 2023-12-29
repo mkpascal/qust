@@ -26,4 +26,4 @@
   - Supports global shortcuts (Ctrl + Alt + Insert / Ctrl + Alt + H),
   - Capable of handling title metadata for compatible streams,
   - Compatible with all HTTP streaming servers,
-  - Available for Windows, MacOS & Linux.
+  - Supports Windows and MacOS.
