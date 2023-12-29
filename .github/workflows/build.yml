@@ -20,16 +20,20 @@ jobs:
       - name: Install Node.js, NPM and Yarn
         uses: actions/setup-node@v1
         with:
-          node-version: 18
+          node-version: 16
 
       - name: Generate random tag from commit
         id: randomtag
-        run: echo "::set-output name=TAG::$(echo ${{ github.sha }} | md5sum | head -c 8)" # Generate an 8 character tag
+        run: echo "RANDOM_TAG=$(echo ${{ github.sha }} | md5sum | head -c 8)" >> $GITHUB_ENV
+
+      - name: Create a new tag
+        run: git tag ${{ env.RANDOM_TAG }} ${{ github.sha }}
+
+      - name: Push the tag to GitHub
+        run: git push origin ${{ env.RANDOM_TAG }}
 
       - name: Build/release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: true
-          # Set the tag to the generated random string
-          tag: ${{ steps.randomtag.outputs.TAG }}
+          release: ${{ startsWith(github.ref, 'refs/heads/release') }}
