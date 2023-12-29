@@ -1,0 +1,56 @@
+{
+  "name": "qust",
+  "version": "1.0.0",
+  "description": "Quick Streaming Player",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mkpascal/qust.git"
+  },
+  "author": "Pascal Muang Khot",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/mkpascal/qust/issues"
+  },
+  "homepage": "https://github.com/mkpascal/qust#readme",
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.pascalmuangkhot.qust",
+    "productName": "Qust",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "build/icons/icon.png"
+    },
+    "win": {
+      "icon": "build/icons/icon.png",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "files": [
+      "**/*",
+      "!**/*.ts",
+      "!*.code-workspace",
+      "!LICENSE.md",
+      "!package-lock.json",
+      "!src/",
+      "!tsconfig.json",
+      "!yarn.lock"
+    ]
+  }
+}

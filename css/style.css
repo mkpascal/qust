@@ -14,16 +14,21 @@ box-sizing: border-box;
 }
 
 body {
-    background: #706fd3;
+    background: #273c75;
+    overflow: hidden;
+    font-family: 'Fira Sans', sans-serif;
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none;    /* Firefox */
+    -ms-user-select: none;     /* Internet Explorer/Edge */
+    user-select: none;         /* Non-prefixed version, currently supported by Chrome, Opera, and Edge */
 }
 
 #canvas {
-    position: absolute;
     top: 0;
     left: 0;
-    width: 350px;
+    width: 435px;
     height: 100px;
-    background: black;
+    background: rgb(33, 37, 41);
     z-index: -1;
     opacity: .8;
   } 
@@ -40,3 +45,46 @@ body {
     width: 300px;
     text-align: center;
   }
+
+  .card-s-2 {
+    padding: 0px;
+  }
+
+  .cards-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  
+  .card {
+    flex: 1; /* This will make each card stretch to fill the space */
+  }
+
+  .card-footer {
+    cursor: pointer;
+  }
+
+  .card-body {
+    cursor: pointer;
+  }
+
+#customPrompt {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 20px;
+  z-index: 1000;
+}
+
+.card-body.single-line {
+  white-space: nowrap;      /* Prevents text from wrapping to the next line */
+  overflow: hidden;         /* Hides text that overflows the element's box */
+  text-overflow: ellipsis;  /* Adds an ellipsis (...) to indicate text overflow */
+}
+
+.general-single-line {
+  white-space: nowrap;      /* Prevents text from wrapping to the next line */
+  overflow: hidden;         /* Hides text that overflows the element's box */
+  text-overflow: ellipsis;  /* Adds an ellipsis (...) to indicate text overflow */
+}
