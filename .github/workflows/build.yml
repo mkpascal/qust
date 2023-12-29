@@ -24,18 +24,22 @@ jobs:
         run: |
           if [ -n "$(find . -type f -name '*.exe')" ]; then
             echo "::set-output name=windows_file::$(find . -type f -name '*.exe')"
+          else
+            echo "::set-output name=windows_file::"
           fi
           if [ -n "$(find . -type f -name '*.dmg')" ]; then
             echo "::set-output name=mac_file::$(find . -type f -name '*.dmg')"
+          else
+            echo "::set-output name=mac_file::"
           fi
 
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          files:
-            windows: ${{ steps.app_files.outputs.windows_file }}
-            mac: ${{ steps.app_files.outputs.mac_file }}
+          files: |
+            ${{ steps.app_files.outputs.windows_file }}
+            ${{ steps.app_files.outputs.mac_file }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
