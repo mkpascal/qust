@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     branches:
-      - release # Trigger only on push to the release branch
+      - release
 
 jobs:
   release:
@@ -15,25 +15,50 @@ jobs:
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
-      - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
         with:
-          node-version: 16
+          node-version: 18
 
-      - name: Generate random tag from commit
-        id: randomtag
-        run: echo "RANDOM_TAG=$(echo ${{ github.sha }} | md5sum | head -c 8)" >> $GITHUB_ENV
+      - name: Generate Tag from Commit SHA
+        run: echo "RELEASE_TAG=v$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
 
-      - name: Create a new tag
-        run: git tag ${{ env.RANDOM_TAG }} ${{ github.sha }}
-
-      - name: Push the tag to GitHub
-        run: git push origin ${{ env.RANDOM_TAG }}
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          release_name: Release ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
 
       - name: Build/release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: ${{ startsWith(github.ref, 'refs/heads/release') }}
+          release: false
+
+      - name: Find Artifact
+        id: find_artifact
+        run: |
+          if [ ${{ matrix.os }} == 'windows-latest' ]; then
+            ARTIFACT_PATH=$(find . -name "*.exe")
+            echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> $GITHUB_ENV
+          elif [ ${{ matrix.os }} == 'macos-latest' ]; then
+            ARTIFACT_PATH=$(find . -name "*.dmg")
+            echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> $GITHUB_ENV
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.ARTIFACT_PATH }}
+          asset_name: ${{ github.run_id }}-${{ matrix.os }}-artifact
+          asset_content_type: application/octet-stream
