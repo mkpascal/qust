@@ -26,4 +26,4 @@
   - Supports global shortcuts (Ctrl + Alt + Insert / Ctrl + Alt + H),
   - Capable of handling title metadata for compatible streams,
   - Fully compatible with Icecast 2 streams,
-  - Available for Windows & MacOS.
+  - Available for Windows, MacOS & Linux.
