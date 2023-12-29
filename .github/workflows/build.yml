@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
       - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v2
         with:
           node-version: 16
 
@@ -30,9 +30,8 @@ jobs:
         with:
           name: electron-build-artifact-${{ matrix.os }}
           path: |
-            dist/**/*.zip
-            dist/**/*.exe
-            dist/**/*.dmg
+            dist/*.zip
+            dist/*.${{ matrix.os == 'macos-latest' && 'dmg' || 'exe' }}
 
       - name: Create Release
         id: create_release
@@ -52,10 +51,15 @@ jobs:
           name: electron-build-artifact-${{ matrix.os }}
 
       - name: Upload Release Assets
+        shell: pwsh
         run: |
-          for file in dist/*.{zip,exe,dmg}; do
-            if [ -f "$file" ]; then
-              echo "Uploading $file"
-              curl -X POST -H "Authorization: token ${{ secrets.github_token }}" -H "Content-Type: $(file -b --mime-type $file)" --data-binary @$file ${{ steps.create_release.outputs.upload_url }}?name=$(basename $file)
-            fi
-          done
+          Get-ChildItem dist/* -Include *.zip, *.exe, *.dmg | ForEach-Object {
+            $asset = $_.FullName
+            Write-Host "Uploading $asset"
+            Invoke-RestMethod `
+              -Method Post `
+              -Headers @{ "Authorization" = "token ${{ secrets.github_token }}" } `
+              -ContentType "application/octet-stream" `
+              -InFile $asset `
+              -Uri "${{ steps.create_release.outputs.upload_url }}?name=$($_.Name)"
+          }
