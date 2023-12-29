@@ -23,29 +23,4 @@ jobs:
         uses: samuelmeuli/action-electron-builder@v1
         with:
           github_token: ${{ secrets.github_token }}
-          release: true
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: electron-build-artifact
-          path: |
-            dist/**/*.zip
-            dist/**/*.exe
-            dist/**/*.dmg
-
-      - name: Download Artifact
-        uses: actions/download-artifact@v2
-        with:
-          name: electron-build-artifact
-
-      - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
-        with:
-          tag_name: release-${{ github.sha }}
-          release_name: Release-${{ github.sha }}
-          draft: false
-          prerelease: false
-          body: "Release of commit ${{ github.sha }}"
+          release: release-${{ github.sha }}-${{ matrix.os }}
