@@ -12,39 +12,37 @@ jobs:
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v1
 
       - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v1
         with:
           node-version: 16
-
-      - name: Determine App File Paths
-        id: app_files
-        run: |
-          if [ -n "$(find . -type f -name '*.exe')" ]; then
-            echo "::set-output name=windows_file::$(find . -type f -name '*.exe')"
-          else
-            echo "::set-output name=windows_file::"
-          fi
-          if [ -n "$(find . -type f -name '*.dmg')" ]; then
-            echo "::set-output name=mac_file::$(find . -type f -name '*.dmg')"
-          else
-            echo "::set-output name=mac_file::"
-          fi
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            ${{ steps.app_files.outputs.windows_file }}
-            ${{ steps.app_files.outputs.mac_file }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build/release Electron app
         uses: samuelmeuli/action-electron-builder@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: ${{ steps.create_release.outputs.upload_url }}
+          github_token: ${{ secrets.github_token }}
+          release: true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: electron-build-artifact
+          path: dist/**  # Assuming the build output is in the 'dist' directory
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: electron-build-artifact
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
+        with:
+          tag_name: ${{ github.sha }}
+          release_name: Release-${{ github.sha }}
+          draft: false
+          prerelease: false
+          body: "Release of commit ${{ github.sha }}"
