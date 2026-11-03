@@ -22,6 +22,16 @@ impl Store {
         save(&path, &data);
         Ok(Store { path, data: Mutex::new(data) })
     }
+
+    pub fn get(&self, key: &str) -> Option<Value> {
+        self.data.lock().unwrap().get(key).cloned()
+    }
+
+    pub fn set(&self, key: &str, value: Value) {
+        let mut data = self.data.lock().unwrap();
+        data.insert(key.to_string(), value);
+        save(&self.path, &data);
+    }
 }
 
 fn read(path: &Path) -> Option<Map<String, Value>> {
@@ -36,14 +46,12 @@ fn save(path: &Path, data: &Map<String, Value>) {
 
 #[tauri::command]
 pub fn get_data(store: State<Store>, key: String) -> Option<Value> {
-    store.data.lock().unwrap().get(&key).cloned()
+    store.get(&key)
 }
 
 #[tauri::command]
 pub fn set_data(store: State<Store>, key: String, value: Value) {
-    let mut data = store.data.lock().unwrap();
-    data.insert(key, value);
-    save(&store.path, &data);
+    store.set(&key, value);
 }
 
 #[tauri::command]

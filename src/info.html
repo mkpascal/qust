@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Stream information</title>
+    <link href="css/style.css" rel="stylesheet" />
+  </head>
+
+  <body class="settings-window">
+    <main class="info">
+      <header class="info-head">
+        <div class="info-now">
+          <div class="info-station" id="station">Not playing</div>
+          <div class="info-title" id="title">Start a cartridge to see its stream details</div>
+        </div>
+        <span class="info-state" id="state">Stopped</span>
+      </header>
+
+      <div class="info-cards">
+        <section class="info-card">
+          <h2>Stream</h2>
+          <dl>
+            <dt>Format</dt><dd id="format"></dd>
+            <dt>Bitrate</dt><dd id="bitrate"></dd>
+            <dt>Sample rate</dt><dd id="samplerate"></dd>
+            <dt>Channels</dt><dd id="channels"></dd>
+          </dl>
+        </section>
+        <section class="info-card">
+          <h2>Network</h2>
+          <dl>
+            <dt>Receiving</dt><dd id="rate"></dd>
+            <dt>Buffer</dt><dd id="buffer"></dd>
+            <dt>Received</dt><dd id="received"></dd>
+            <dt>Connected for</dt><dd id="connected"></dd>
+          </dl>
+        </section>
+        <section class="info-card">
+          <h2>Stability</h2>
+          <dl>
+            <dt>Dropouts</dt><dd id="stalls"></dd>
+            <dt>Reconnections</dt><dd id="reconnects"></dd>
+            <dt>Title changes</dt><dd id="titleChanges"></dd>
+            <dt>Host</dt><dd id="host"></dd>
+          </dl>
+        </section>
+      </div>
+
+      <section class="info-card">
+        <h2>ICY metadata</h2>
+        <dl class="info-pairs">
+          <dt>Stream name</dt><dd id="icyName"></dd>
+          <dt>Current title</dt><dd id="icyTitle"></dd>
+          <dt>Genre</dt><dd id="icyGenre"></dd>
+          <dt>Description</dt><dd id="icyDescription"></dd>
+          <dt>Website</dt><dd id="icyWebsite"></dd>
+          <dt>Server</dt><dd id="icyServer"></dd>
+          <dt>Content type</dt><dd id="icyContentType"></dd>
+          <dt>Metadata interval</dt><dd id="icyMetaint"></dd>
+          <dt>Metadata received</dt><dd id="icyMetaBytes"></dd>
+        </dl>
+      </section>
+    </main>
+
+    <script src="js/bridge.js"></script>
+    <script src="js/info.js"></script>
+  </body>
+</html>

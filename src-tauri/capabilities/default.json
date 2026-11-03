@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main window",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "description": "Permissions for the player, settings and stream information windows",
+  "windows": ["main", "settings", "info"],
+  "permissions": ["core:default", "core:menu:default", "core:window:allow-close"]
 }

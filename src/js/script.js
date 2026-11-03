@@ -1,377 +1,607 @@
-let audio    = document.getElementById('audio')
-let spectrum = new Spectrum(document.getElementById('canvas'), audio)
+const SLOTS = 6;
+const LIVE_RESUME_SECONDS = 10;
+const INFO_INTERVAL = 2000;
+const STATUS_INTERVAL = 15000;
 
-var globalPlayerClicked = "";
-var intervalId;
-var titleP;
-var urlP;
+const audio = document.getElementById('audio');
+const spectrum = new Spectrum(document.getElementById('canvas'), audio);
 
-function start(){
+const ui = {
+    clock: document.getElementById('clock'),
+    clockText: document.getElementById('clockText'),
+    stateIcon: document.getElementById('stateIcon'),
+    station: document.getElementById('station'),
+    titleRow: document.getElementById('titleRow'),
+    title: document.getElementById('title'),
+    kbps: document.getElementById('kbps'),
+    khz: document.getElementById('khz'),
+    mono: document.getElementById('mono'),
+    stereo: document.getElementById('stereo'),
+    playButton: document.getElementById('playButton'),
+    pauseButton: document.getElementById('pauseButton'),
+    stopButton: document.getElementById('stopButton'),
+    cartridges: document.getElementById('cartridges'),
+    dialog: document.getElementById('dialog'),
+    dialogForm: document.getElementById('dialogForm'),
+    dialogTitle: document.getElementById('dialogTitle'),
+    dialogError: document.getElementById('dialogError'),
+    streamTitle: document.getElementById('streamTitle'),
+    streamURL: document.getElementById('streamURL'),
+    ejectButton: document.getElementById('ejectButton'),
+    cancelButton: document.getElementById('cancelButton'),
+    settingsButton: document.getElementById('settingsButton'),
+    infoButton: document.getElementById('infoButton'),
+};
+
+// cartridges[i] = { title, url } or null, for slots player1..player6
+let cartridges = new Array(SLOTS).fill(null);
+let activeSlot = null;
+// stopped | connecting | playing | buffering | paused
+let state = 'stopped';
+let pausedAt = 0;
+let infoTimer = null;
+let lastStatusFetch = 0;
+let streamInfo = {};
+let statusTitle = null;
+// times playback stalled (the "waiting" event) since the stream started
+let stalls = 0;
+let dialogSlot = null;
+let settings = { colors: 'classic', autoplay: false };
+
+/* Playback */
+
+function play() {
+    const cartridge = cartridges[activeSlot];
+    if (!cartridge) return;
     spectrum.start();
-    changeVisibilityOfNowPlaying('visible');
-
-    changeCardStatusText("<b>Now playing:</b> " + titleP + " (" + urlP + ")");
-
-    clearInterval(intervalId);
-    intervalId = setInterval(function() {
-        getMetaDataFromStream(urlP)
-            .then(title => changeCardStatusText("<b>Now playing:</b> " + title + " (" + titleP + ")"))
-            .catch(error => console.error(error));
-    }, 15000);
-
-    audio.load();
-    audio.play();
+    const resume = state === 'paused' && (Date.now() - pausedAt) / 1000 < LIVE_RESUME_SECONDS;
+    if (!resume) {
+        stalls = 0;
+        streamInfo = {};
+        statusTitle = null;
+        lastStatusFetch = 0;
+        audio.src = proxied(cartridge.url);
+    }
+    setState(resume ? 'buffering' : 'connecting');
+    audio.play().catch(() => {});
+    startInfo();
 }
 
-function stop(){
-    changeVisibilityOfNowPlaying('hidden');
-    clearInterval(intervalId);
-    spectrum.stop();
-    changeCardStatusText("<b>Stopped.</b>");
+function pause() {
+    if (state === 'stopped' || state === 'paused') return;
     audio.pause();
-    audio.currentTime = 0;
+    pausedAt = Date.now();
+    setState('paused');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const cardFooters = document.querySelectorAll('.card-footer');
-    const cardBodies = document.querySelectorAll('.card-body-player');
-
-    const customPrompt = document.getElementById('customPrompt');
-    
-    const submitBtn = document.getElementById('submitBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const emptyBtn = document.getElementById('emptyBtn');
-
-    const streamTitleInput = document.getElementById('streamTitle');
-    const streamURLInput = document.getElementById('streamURL');
-
-    cardBodies.forEach(function(cardBody) {
-        cardBody.addEventListener('click', function() {
-            var parentDiv = this.parentElement;
-            var parentClass = parentDiv.className;
-    
-            if (parentClass.includes("player")) {
-                var parts = parentClass.split(" ");
-                var CBplayer = parts.find(part => part.includes("player"));
-            }
-
-            if (parentClass.includes("text-bg-secondary")) {                
-            } else {
-                loadData(CBplayer + '-title').then(title => {
-                    titleP = title;
-                    return loadData(CBplayer + '-url');
-                }).then(url => {
-                    urlP = url;
-
-                    var pppDivs = document.querySelectorAll('.ppp');
-
-                    pppDivs.forEach(element => {
-                        var CurrentBgSuc = Array.from(element.classList).find(cls => cls.includes("text-bg-success"));
-
-                        if(CurrentBgSuc) {
-                            element.classList.remove('text-bg-success');
-                            element.classList.add('text-bg-warning');
-                        }
-
-                    });
-    
-                    var playerDiv = document.querySelector('.' + CBplayer);
-                    if (playerDiv) {
-                        playerDiv.classList.remove('text-bg-warning');
-                        playerDiv.classList.add('text-bg-success');
-
-                        var audioPlayer = document.getElementById('audio');
-                        audioPlayer.src = proxied(urlP);
-
-                        saveData('last-selected-player', CBplayer);
-                        saveData('last-selected-title', titleP);
-                        saveData('last-selected-url', urlP);                
-
-                        audioPlayer.load();
-                        
-                        start();
-                    } 
-
-                }).catch(error => {
-                    console.error('Error loading data:', error);
-                });
-            }
-        
-        });
-    });
-
-    cardFooters.forEach(function(cardFooter) {
-        cardFooter.addEventListener('click', function() {
-            var parentDiv = this.parentElement;
-            var parentClass = parentDiv.className;
-    
-            globalPlayerClicked = parentClass;
-    
-            customPrompt.style.display = 'flex';
-        });
-    });
-
-    submitBtn.addEventListener('click', function() {
-        if (globalPlayerClicked.includes("player")) {
-            var parts = globalPlayerClicked.split(" ");
-            var Cplayer = parts.find(part => part.includes("player"));
-        }
-
-        const streamTitle = streamTitleInput.value;
-        const streamURL = streamURLInput.value;
-
-        saveData(Cplayer + '-title', streamTitle);
-        saveData(Cplayer + '-url', streamURL);
-
-        var titleSpan = document.querySelector('.' + Cplayer + '-title');
-        if (titleSpan) {
-            titleSpan.innerHTML = streamTitle;
-        }
-
-        var playerDiv = document.querySelector('.' + Cplayer);
-        if (playerDiv) {
-            playerDiv.classList.remove('text-bg-secondary');
-            playerDiv.classList.add('text-bg-warning');
-        }
-
-        customPrompt.style.display = 'none';
-        clearInputs();
-    });
-
-    cancelBtn.addEventListener('click', function() {
-        customPrompt.style.display = 'none';
-        clearInputs();
-    });
-
-    emptyBtn.addEventListener('click', function() {
-        if (globalPlayerClicked.includes("player")) {
-            var parts = globalPlayerClicked.split(" ");
-            var Cplayer = parts.find(part => part.includes("player"));
-        }
-
-        var titleSpan = document.querySelector('.' + Cplayer + '-title');
-        if (titleSpan) {
-            titleSpan.innerHTML = "&nbsp;";
-        }
-
-        var playerDiv = document.querySelector('.' + Cplayer);
-        if (playerDiv) {
-            playerDiv.classList.add('text-bg-secondary');
-            playerDiv.classList.remove('text-bg-success');
-            playerDiv.classList.remove('text-bg-warning');
-        }
-        
-        customPrompt.style.display = 'none';
-        deleteData(Cplayer + '-title');
-        deleteData(Cplayer + '-url');
-        clearInputs();
-    });
-
-    function clearInputs() {
-        streamTitleInput.value = '';
-        streamURLInput.value = '';
-    }
-});
-
-
-document.addEventListener('DOMContentLoaded', async () => {
-    const variablesList = [];
-    const numberOfPlayers = 6;
-    
-    for (let i = 1; i <= numberOfPlayers; i++) {
-        variablesList.push(`player${i}-title`);
-        variablesList.push(`player${i}-url`);
-    }
-
-    
-    
-    for (const key of variablesList) {
-        try {
-            const data = await loadData(key);
-
-            if (typeof data !== 'undefined') {
-                var playerAlone = key.split('-')[0];
-
-                var playerDiv = document.querySelector('.' + playerAlone);
-                if (playerDiv) {
-                    playerDiv.classList.remove('text-bg-secondary');
-                    playerDiv.classList.add('text-bg-warning');
-                }
-
-                if (key.includes("-title")){
-                    var titleSpan = document.querySelector('.' + playerAlone + '-title');
-                    if (titleSpan) {
-                        titleSpan.innerHTML = data;
-                    }
-                }
-            } else {
-            }
-        } catch (error) {
-            console.error(`Error loading ${key}:`, error);
-        }
-    }
-
-
-    const lastVariablesList = ['last-selected-player', 'last-selected-title', 'last-selected-url'];
-
-    for (const key of lastVariablesList) {
-        try {
-            const data = await loadData(key);
-
-
-            if (typeof data !== 'undefined') {
-                console.log(key);
-                console.log(data);
-
-                
-                if (key.includes("-player")){
-                    var playerDiv = document.querySelector('.' + data);
-                    
-                    if (playerDiv) {
-                        playerDiv.classList.remove('text-bg-secondary');
-                        playerDiv.classList.remove('text-bg-warning');
-                        playerDiv.classList.add('text-bg-success');
-                    }
-                }
-
-                if (key.includes("-title")){
-                    changeCardStatusText("<b>To start, press play or select a different stream.</b>");
-
-                    titleP = data;
-                }
-
-                if (key.includes("-url")){
-                    var audioPlayer = document.getElementById('audio');
-                    audioPlayer.src = proxied(data);
-                    audioPlayer.load();
-
-                    urlP = data;
-                }
-                
-
-            } else {
-            }
-        } catch (error) {
-            console.error(`Error loading ${key}:`, error);
-        }
-    }
-
-
-
-
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-    var volumeSlider = document.getElementById("volumeSlider");
-    var volumeRail = volumeSlider.querySelector(".volume-rail");
-    var volumeIcon = document.getElementById("volumeIcon");
-    var volumeDisplay = document.getElementById("volumeDisplay");
-
-    var volume = 0.5;
-
-    function setVolume(value) {
-        volume = Math.round(Math.max(0, Math.min(1, value)) * 100) / 100;
-        spectrum.setVolume(volume);
-        volumeSlider.style.setProperty("--volume", volume);
-        volumeSlider.setAttribute("aria-valuenow", Math.round(volume * 100));
-        volumeDisplay.textContent = `${Math.round(volume * 100)}%`;
-        volumeIcon.className = "bi volume-icon " + (volume === 0 ? "bi-volume-mute-fill" : volume < 0.5 ? "bi-volume-down-fill" : "bi-volume-up-fill");
-    }
-
-    function volumeFromPointer(event) {
-        var rect = volumeRail.getBoundingClientRect();
-        setVolume((event.clientX - rect.left) / rect.width);
-    }
-
-    var dragging = false;
-
-    function endDrag() {
-        dragging = false;
-        volumeSlider.classList.remove("is-dragging");
-    }
-
-    volumeSlider.addEventListener("pointerdown", function(event) {
-        dragging = true;
-        volumeSlider.setPointerCapture(event.pointerId);
-        volumeSlider.classList.add("is-dragging");
-        volumeFromPointer(event);
-    });
-
-    volumeSlider.addEventListener("pointermove", function(event) {
-        if (dragging) {
-            volumeFromPointer(event);
-        }
-    });
-
-    volumeSlider.addEventListener("pointerup", endDrag);
-    volumeSlider.addEventListener("pointercancel", endDrag);
-    volumeSlider.addEventListener("lostpointercapture", endDrag);
-
-    volumeSlider.addEventListener("wheel", function(event) {
-        event.preventDefault();
-        setVolume(volume + (event.deltaY < 0 ? 0.05 : -0.05));
-    }, { passive: false });
-
-    volumeSlider.addEventListener("keydown", function(event) {
-        var steps = { ArrowRight: 0.05, ArrowUp: 0.05, ArrowLeft: -0.05, ArrowDown: -0.05, PageUp: 0.1, PageDown: -0.1 };
-        if (event.key in steps) {
-            setVolume(volume + steps[event.key]);
-        } else if (event.key === "Home") {
-            setVolume(0);
-        } else if (event.key === "End") {
-            setVolume(1);
-        } else {
-            return;
-        }
-        event.preventDefault();
-    });
-
-    setVolume(volume);
-});
-
-function changeCardStatusText(newText) {
-    var cardStatusTextElement = document.querySelector('.card-status-text');
-    if(cardStatusTextElement) {
-        cardStatusTextElement.innerHTML = newText;
-    } else {
-        console.log("Element with class 'card-status-text' not found.");
-    }
+function stop() {
+    setState('stopped');
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    spectrum.stop();
+    stopInfo();
+    streamInfo = {};
+    statusTitle = null;
+    renderInfo();
 }
 
-function changeVisibilityOfNowPlaying(visibility) {
-    var elements = document.querySelectorAll('.nowplaying');
-    elements.forEach(function(element) {
-        element.style.visibility = visibility;
-    });
+function setState(next) {
+    state = next;
+    const icon = { playing: 'play', buffering: 'play', connecting: 'play', paused: 'pause' }[state] || 'stop';
+    ui.stateIcon.setAttribute('href', '#i-' + icon);
+    ui.clock.classList.toggle('is-idle', state === 'stopped');
+    spectrum.setLoading(state === 'connecting' || state === 'buffering');
+    ui.playButton.disabled = activeSlot === null || state === 'playing' || state === 'buffering' || state === 'connecting';
+    ui.pauseButton.disabled = state === 'stopped' || state === 'paused';
+    ui.stopButton.disabled = state === 'stopped';
+    renderCartridges();
+    renderTitle();
+    renderClock();
+    emitStatus();
+}
+
+audio.addEventListener('playing', () => {
+    if (state !== 'stopped' && state !== 'paused') setState('playing');
+});
+
+audio.addEventListener('waiting', () => {
+    if (state !== 'playing') return;
+    stalls++;
+    setState('buffering');
+});
+
+audio.addEventListener('error', () => {
+    if (state === 'stopped') return;
+    stop();
+    setTitle("Couldn't play this stream", true);
+});
+
+/* Stream details: ICY title and format from the proxy, Icecast status page as a title fallback */
+
+function startInfo() {
+    stopInfo();
+    pollInfo();
+    infoTimer = setInterval(pollInfo, INFO_INTERVAL);
+}
+
+function stopInfo() {
+    clearInterval(infoTimer);
+    infoTimer = null;
+}
+
+async function pollInfo() {
+    const cartridge = cartridges[activeSlot];
+    if (!cartridge) return;
+    try {
+        streamInfo = await (await fetch(proxiedInfo(cartridge.url))).json();
+    } catch (error) {
+        streamInfo = {};
+    }
+    if (!streamInfo.title && Date.now() - lastStatusFetch > STATUS_INTERVAL) {
+        lastStatusFetch = Date.now();
+        statusTitle = await getMetaDataFromStream(cartridge.url);
+    }
+    renderInfo();
+}
+
+function renderInfo() {
+    const info = state === 'stopped' ? {} : streamInfo;
+    ui.kbps.textContent = info.bitrate || '--';
+    ui.khz.textContent = info.samplerate ? formatKhz(info.samplerate) : '--';
+    const channels = state === 'stopped' ? null : info.channels || spectrum.channels();
+    ui.mono.classList.toggle('is-on', channels === 1);
+    ui.stereo.classList.toggle('is-on', channels >= 2);
+    renderTitle();
+}
+
+function formatKhz(samplerate) {
+    const khz = samplerate / 1000;
+    return Number.isInteger(khz) ? String(khz) : khz.toFixed(1);
 }
 
 async function getMetaDataFromStream(streamUrl) {
     try {
-        let statusUrl = new URL(streamUrl);
+        const statusUrl = new URL(streamUrl);
         statusUrl.pathname = '/status-json.xsl';
-
-        const response = await fetch(proxied(statusUrl.href));
-        const data = await response.json();
-
+        const data = await (await fetch(proxied(statusUrl.href))).json();
+        const sources = [].concat(data.icestats.source || []);
         if (streamUrl.endsWith('/')) {
-            const firstStreamInfo = data.icestats.source[0];
-            return firstStreamInfo && firstStreamInfo.title ? firstStreamInfo.title : null;
-        } else {
-            const streamPath = new URL(streamUrl).pathname;
-            const streamInfo = data.icestats.source.find(source => {
-                const sourcePath = new URL(source.listenurl).pathname;
-                return sourcePath === streamPath;
-            });
-
-            if (streamInfo && streamInfo.title) {
-                return streamInfo.title;
-            } else {
-                console.log('Specific stream not found or no title available');
-                return "N/A";
-            }
+            return (sources[0] && sources[0].title) || null;
         }
+        const streamPath = new URL(streamUrl).pathname;
+        const source = sources.find((s) => s.listenurl && new URL(s.listenurl).pathname === streamPath);
+        return (source && source.title) || null;
     } catch (error) {
-        console.error('Error fetching stream metadata:', error);
-        return "N/A";
+        return null;
     }
 }
+
+/* Display */
+
+function renderTitle() {
+    const cartridge = cartridges[activeSlot];
+    ui.station.textContent = cartridge ? cartridge.title : 'No cartridge loaded';
+    if (!cartridge) {
+        setTitle('Load a cartridge to start', true);
+    } else if (state === 'stopped') {
+        setTitle('Stopped', true);
+    } else if (state === 'connecting') {
+        setTitle('Connecting…', true);
+    } else {
+        const title = streamInfo.title || statusTitle || streamInfo.name || cartridge.title;
+        setTitle(state === 'paused' ? title + ' (paused)' : title, false);
+    }
+}
+
+function setTitle(text, dim) {
+    if (ui.title.textContent === text && ui.title.classList.contains('is-dim') === dim) return;
+    ui.title.textContent = text;
+    ui.title.classList.toggle('is-dim', dim);
+    ui.titleRow.classList.remove('is-scrolling');
+    const overflow = ui.title.offsetWidth - ui.titleRow.clientWidth;
+    if (overflow > 0) {
+        ui.titleRow.classList.add('is-scrolling');
+        ui.titleRow.style.setProperty('--distance', -(overflow + 18) + 'px');
+        ui.titleRow.style.setProperty('--duration', Math.max(6, overflow / 20 + 4) + 's');
+    }
+}
+
+function renderClock() {
+    const seconds = state === 'stopped' ? 0 : Math.floor(audio.currentTime || 0);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor(seconds / 60) % 60;
+    const s = String(seconds % 60).padStart(2, '0');
+    ui.clockText.textContent = h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${String(m).padStart(2, '0')}:${s}`;
+}
+
+setInterval(renderClock, 250);
+
+/* Cartridges */
+
+function renderCartridges() {
+    if (ui.cartridges.children.length !== SLOTS) {
+        ui.cartridges.innerHTML = '';
+        for (let slot = 0; slot < SLOTS; slot++) {
+            const element = document.createElement('div');
+            element.className = 'cartridge';
+            element.innerHTML = `
+                <button class="cartridge-body">
+                  <span class="equalizer" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <svg class="cartridge-plus"><use href="#i-plus" /></svg>
+                  <span class="cartridge-name"></span>
+                  <span class="cartridge-host"></span>
+                </button>
+                <button class="cartridge-eject" title="Edit or eject" aria-label="Edit or eject"><svg><use href="#i-eject" /></svg></button>`;
+            element.querySelector('.cartridge-body').addEventListener('click', () => {
+                if (cartridges[slot]) selectSlot(slot);
+                else openDialog(slot);
+            });
+            element.querySelector('.cartridge-eject').addEventListener('click', () => openDialog(slot));
+            ui.cartridges.appendChild(element);
+        }
+    }
+
+    cartridges.forEach((cartridge, slot) => {
+        const element = ui.cartridges.children[slot];
+        const empty = !cartridge;
+        element.classList.toggle('is-empty', empty);
+        element.classList.toggle('is-active', !empty && slot === activeSlot);
+        element.classList.toggle('is-playing', !empty && slot === activeSlot && state !== 'stopped' && state !== 'paused');
+        element.querySelector('.cartridge-plus').style.display = empty ? '' : 'none';
+        element.querySelector('.cartridge-name').textContent = empty ? 'Load' : cartridge.title;
+        element.querySelector('.cartridge-host').textContent = empty ? '' : host(cartridge.url);
+        element.querySelector('.cartridge-host').hidden = empty;
+        element.querySelector('.cartridge-eject').hidden = empty;
+        element.querySelector('.cartridge-body').setAttribute('aria-label', empty ? `Load cartridge ${slot + 1}` : `Play ${cartridge.title}`);
+    });
+}
+
+function host(url) {
+    try {
+        return new URL(url).host;
+    } catch (error) {
+        return url;
+    }
+}
+
+function selectSlot(slot) {
+    const cartridge = cartridges[slot];
+    if (state !== 'stopped') stop();
+    activeSlot = slot;
+    saveData('last-selected-player', 'player' + (slot + 1));
+    saveData('last-selected-title', cartridge.title);
+    saveData('last-selected-url', cartridge.url);
+    play();
+}
+
+/* Dialog */
+
+function openDialog(slot) {
+    dialogSlot = slot;
+    const cartridge = cartridges[slot];
+    ui.dialogTitle.textContent = cartridge ? 'Edit cartridge' : 'Load cartridge';
+    ui.streamTitle.value = cartridge ? cartridge.title : '';
+    ui.streamURL.value = cartridge ? cartridge.url : '';
+    ui.ejectButton.hidden = !cartridge;
+    ui.dialogError.hidden = true;
+    ui.dialog.hidden = false;
+    ui.streamTitle.focus();
+}
+
+function closeDialog() {
+    ui.dialog.hidden = true;
+    dialogSlot = null;
+}
+
+ui.dialogForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const url = ui.streamURL.value.trim();
+    let valid = false;
+    try {
+        valid = ['http:', 'https:'].includes(new URL(url).protocol);
+    } catch (error) {}
+    if (!valid) {
+        ui.dialogError.textContent = 'Enter a stream address starting with http:// or https://';
+        ui.dialogError.hidden = false;
+        ui.streamURL.focus();
+        return;
+    }
+
+    const slot = dialogSlot;
+    const previous = cartridges[slot];
+    const title = ui.streamTitle.value.trim() || host(url);
+    cartridges[slot] = { title, url };
+    saveData(`player${slot + 1}-title`, title);
+    saveData(`player${slot + 1}-url`, url);
+    closeDialog();
+
+    if (slot === activeSlot) {
+        saveData('last-selected-title', title);
+        saveData('last-selected-url', url);
+        if (previous && previous.url !== url && state !== 'stopped') {
+            stop();
+            play();
+        }
+    }
+    setState(state);
+});
+
+function eject(slot) {
+    cartridges[slot] = null;
+    deleteData(`player${slot + 1}-title`);
+    deleteData(`player${slot + 1}-url`);
+    if (slot === activeSlot) {
+        stop();
+        activeSlot = null;
+        deleteData('last-selected-player');
+        deleteData('last-selected-title');
+        deleteData('last-selected-url');
+    }
+    setState(state);
+}
+
+ui.ejectButton.addEventListener('click', () => {
+    const slot = dialogSlot;
+    closeDialog();
+    eject(slot);
+});
+
+ui.cancelButton.addEventListener('click', closeDialog);
+
+ui.dialog.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        closeDialog();
+    } else if (event.key === 'Tab') {
+        const focusable = [...ui.dialog.querySelectorAll('input, button')].filter((element) => !element.hidden);
+        const index = focusable.indexOf(document.activeElement);
+        const next = event.shiftKey ? index - 1 : index + 1;
+        if (next < 0 || next >= focusable.length) {
+            event.preventDefault();
+            focusable[(next + focusable.length) % focusable.length].focus();
+        }
+    }
+});
+
+/* Sliders */
+
+function makeSlider(element, { min, max, value, center, onInput }) {
+    const rail = element.querySelector('.slider-rail');
+    const span = max - min;
+    let current = value;
+    let dragging = false;
+
+    function set(next, snap) {
+        next = Math.round(Math.min(max, Math.max(min, next)));
+        if (snap && center !== undefined && Math.abs(next - center) <= span * 0.04) next = center;
+        current = next;
+        const ratio = (next - min) / span;
+        const origin = center === undefined ? 0 : (center - min) / span;
+        element.style.setProperty('--value', ratio);
+        element.style.setProperty('--from', Math.min(origin, ratio));
+        element.style.setProperty('--to', Math.max(origin, ratio));
+        element.setAttribute('aria-valuenow', next);
+        onInput(next);
+    }
+
+    function fromPointer(event) {
+        const rect = rail.getBoundingClientRect();
+        set(min + ((event.clientX - rect.left) / rect.width) * span, true);
+    }
+
+    function endDrag() {
+        dragging = false;
+        element.classList.remove('is-dragging');
+    }
+
+    element.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        dragging = true;
+        element.setPointerCapture(event.pointerId);
+        element.classList.add('is-dragging');
+        fromPointer(event);
+    });
+    element.addEventListener('pointermove', (event) => {
+        if (dragging) fromPointer(event);
+    });
+    element.addEventListener('pointerup', endDrag);
+    element.addEventListener('pointercancel', endDrag);
+    element.addEventListener('lostpointercapture', endDrag);
+    element.addEventListener('dblclick', () => set(center !== undefined ? center : current, false));
+    element.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        set(current + (event.deltaY < 0 ? 1 : -1) * span * 0.05, false);
+    }, { passive: false });
+    element.addEventListener('keydown', (event) => {
+        const steps = { ArrowRight: 0.05, ArrowUp: 0.05, ArrowLeft: -0.05, ArrowDown: -0.05, PageUp: 0.1, PageDown: -0.1 };
+        if (event.key in steps) set(current + steps[event.key] * span, false);
+        else if (event.key === 'Home') set(min, false);
+        else if (event.key === 'End') set(max, false);
+        else return;
+        event.preventDefault();
+    });
+
+    set(value, false);
+    return { set: (next) => set(next, false) };
+}
+
+function debounce(fn, delay) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+    };
+}
+
+const saveVolume = debounce((value) => saveData('volume', value), 300);
+const saveBalance = debounce((value) => saveData('balance', value), 300);
+
+const volume = makeSlider(document.getElementById('volumeSlider'), {
+    min: 0,
+    max: 100,
+    value: 50,
+    onInput(value) {
+        spectrum.setVolume(value / 100);
+        document.getElementById('volumeValue').textContent = value + '%';
+        document.getElementById('volumeIcon').setAttribute('href', value === 0 ? '#i-vol-0' : value < 50 ? '#i-vol-1' : '#i-vol-2');
+        saveVolume(value);
+    },
+});
+
+const balance = makeSlider(document.getElementById('balanceSlider'), {
+    min: -100,
+    max: 100,
+    value: 0,
+    center: 0,
+    onInput(value) {
+        spectrum.setBalance(value / 100);
+        document.getElementById('balanceValue').textContent = value === 0 ? 'C' : (value < 0 ? 'L ' : 'R ') + Math.abs(value);
+        saveBalance(value);
+    },
+});
+
+/* Settings (edited in the settings window, settings.js) */
+
+const { Menu } = window.__TAURI__.menu;
+
+function applySettings() {
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-light').trim();
+    spectrum.setColors(settings.colors, accent);
+}
+
+function openSettings() {
+    closeDialog();
+    invoke('open_panel', { name: 'settings' });
+}
+
+function openInfo() {
+    closeDialog();
+    invoke('open_panel', { name: 'info' });
+}
+
+ui.settingsButton.addEventListener('click', openSettings);
+ui.infoButton.addEventListener('click', openInfo);
+
+/* Player status for the Stream information window (info.js): sent every second, on state
+   changes, and when that window asks for it. */
+
+function emitStatus() {
+    const cartridge = cartridges[activeSlot];
+    let buffer = 0;
+    if (audio.buffered.length) buffer = Math.max(0, audio.buffered.end(audio.buffered.length - 1) - audio.currentTime);
+    window.__TAURI__.event.emit('player-status', {
+        state,
+        station: cartridge ? cartridge.title : null,
+        url: cartridge ? cartridge.url : null,
+        buffer: state === 'stopped' ? null : buffer,
+        stalls,
+        statusTitle,
+    });
+}
+
+setInterval(emitStatus, 1000);
+listen('player-status-request', emitStatus);
+
+let shortcuts = {};
+
+function shortcutLabel(action) {
+    const binding = shortcuts[action];
+    return binding && binding.registered ? shortcutKeys(binding.accelerator).join('+') : null;
+}
+
+function applyShortcuts() {
+    const play = shortcutLabel('play');
+    const stop = shortcutLabel('stop');
+    ui.playButton.title = play ? `Play (${play})` : 'Play';
+    ui.stopButton.title = stop ? `Stop (${stop})` : 'Stop';
+}
+
+listen('settings-changed', ({ payload }) => {
+    if (payload.key === 'shortcuts') {
+        shortcuts = payload.value;
+        applyShortcuts();
+    } else {
+        settings[payload.key] = payload.value;
+        applySettings();
+    }
+});
+
+/* Right-click menu */
+
+document.addEventListener('contextmenu', async (event) => {
+    if (!ui.dialog.hidden) return;
+
+    const element = event.target.closest('.cartridge');
+    const slot = element ? [...ui.cartridges.children].indexOf(element) : -1;
+    const items = [];
+    if (slot >= 0 && cartridges[slot]) {
+        items.push(
+            { text: 'Play', action: () => selectSlot(slot) },
+            { text: 'Edit…', action: () => openDialog(slot) },
+            { text: 'Eject', action: () => eject(slot) },
+        );
+    } else if (slot >= 0) {
+        items.push({ text: 'Load cartridge…', action: () => openDialog(slot) });
+    } else {
+        const playing = state !== 'stopped' && state !== 'paused';
+        items.push(
+            playing
+                ? { text: 'Pause', action: pause }
+                : { text: 'Play', enabled: activeSlot !== null, accelerator: shortcutLabel('play'), action: play },
+            { text: 'Stop', enabled: state !== 'stopped', accelerator: shortcutLabel('stop'), action: stop },
+        );
+    }
+    items.forEach((item) => { if (!item.accelerator) delete item.accelerator; });
+    if (items.length) items.push({ item: 'Separator' });
+    items.push({ text: 'Stream information', action: openInfo }, { text: 'Settings', action: openSettings });
+
+    let menu;
+    try {
+        menu = await Menu.new({ items });
+    } catch (error) {
+        // A shortcut label the menu can't parse: show the menu without them.
+        items.forEach((item) => delete item.accelerator);
+        menu = await Menu.new({ items });
+    }
+    await menu.popup();
+});
+
+/* Buttons and shortcuts */
+
+ui.playButton.addEventListener('click', play);
+ui.pauseButton.addEventListener('click', pause);
+ui.stopButton.addEventListener('click', stop);
+
+listen('play-action', () => {
+    if (state === 'stopped' || state === 'paused') play();
+});
+listen('stop-action', stop);
+
+/* Startup */
+
+(async function init() {
+    for (let slot = 0; slot < SLOTS; slot++) {
+        const [title, url] = await Promise.all([loadData(`player${slot + 1}-title`), loadData(`player${slot + 1}-url`)]);
+        if (url) cartridges[slot] = { title: title || host(url), url };
+    }
+
+    const last = await loadData('last-selected-player');
+    const lastSlot = last ? parseInt(String(last).replace('player', ''), 10) - 1 : -1;
+    if (cartridges[lastSlot]) activeSlot = lastSlot;
+
+    const [savedVolume, savedBalance] = await Promise.all([loadData('volume'), loadData('balance')]);
+    if (typeof savedVolume === 'number') volume.set(savedVolume);
+    if (typeof savedBalance === 'number') balance.set(savedBalance);
+
+    const [colors, autoplay] = await Promise.all([loadData('visualizer-colors'), loadData('autoplay')]);
+    if (['classic', 'white', 'accent'].includes(colors)) settings.colors = colors;
+    settings.autoplay = autoplay === true;
+    applySettings();
+    shortcuts = await invoke('get_shortcuts');
+    applyShortcuts();
+
+    setState('stopped');
+    renderInfo();
+    if (settings.autoplay && activeSlot !== null) play();
+})();

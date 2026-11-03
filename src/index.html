@@ -1,184 +1,104 @@
-<html>
+<!doctype html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <style>
-      @import url("https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;700&display=swap");
-    </style>
-    <link href="css/bootstrap.min.css" rel="stylesheet" />
+    <title>Qust</title>
     <link href="css/style.css" rel="stylesheet" />
-    <link
-      rel="stylesheet"
-      href="lib/bootstrap-icons-1.11.2/font/bootstrap-icons.min.css"
-    />
   </head>
 
   <body>
-    <div class="card text-bg-light" id="customPrompt" style="display: none;">
-      <div class="">
-        <label for="streamTitle">Stream Title&nbsp;</label>
-        <input
-          class="form-control"
-          type="text"
-          id="streamTitle"
-          name="streamTitle"
-        />
-      </div>
-      <div class="mt-1">
-        <label for="streamURL">Stream URL&nbsp;</label>
-        <input
-          class="form-control"
-          type="text"
-          id="streamURL"
-          name="streamURL"
-        />
-      </div>
-      <a class="btn btn-success btn-sm mt-2" id="submitBtn">Add</a>
-      <a class="btn btn-danger btn-sm mt-1" id="cancelBtn">Cancel</a>
-      <a class="btn btn-warning btn-sm mt-1" id="emptyBtn">Empty</a>
+    <svg class="icons" aria-hidden="true">
+      <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.3v9.4a.8.8 0 0 0 1.2.7l7.5-4.7a.8.8 0 0 0 0-1.4L6.2 2.6A.8.8 0 0 0 5 3.3z" /></symbol>
+      <symbol id="i-pause" viewBox="0 0 16 16"><rect x="3.5" y="2.5" width="3" height="11" rx="1" /><rect x="9.5" y="2.5" width="3" height="11" rx="1" /></symbol>
+      <symbol id="i-stop" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="1.5" /></symbol>
+      <symbol id="i-eject" viewBox="0 0 16 16"><path d="M7.3 3.4a.9.9 0 0 1 1.4 0l4 4.9a.6.6 0 0 1-.5 1H3.8a.6.6 0 0 1-.5-1z" /><rect x="3" y="10.6" width="10" height="2" rx=".8" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></symbol>
+      <symbol id="i-speaker" viewBox="0 0 16 16"><path d="M7.7 2.7 4.6 5.3H2.8a.8.8 0 0 0-.8.8v3.8c0 .4.4.8.8.8h1.8l3.1 2.6a.5.5 0 0 0 .8-.4V3.1a.5.5 0 0 0-.8-.4z" /></symbol>
+      <symbol id="i-vol-0" viewBox="0 0 16 16"><use href="#i-speaker" /><path d="m10.5 6 3.5 4m0-4-3.5 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></symbol>
+      <symbol id="i-vol-1" viewBox="0 0 16 16"><use href="#i-speaker" /><path d="M10.6 5.8a3 3 0 0 1 0 4.4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></symbol>
+      <symbol id="i-vol-2" viewBox="0 0 16 16"><use href="#i-speaker" /><path d="M10.6 5.8a3 3 0 0 1 0 4.4M12.4 4a5.6 5.6 0 0 1 0 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.9" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2.317 2.317" /><circle cx="8" cy="8" r="3.9" fill="none" stroke="currentColor" stroke-width="2.2" /></symbol>
+      <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M8 7.2v4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="8" cy="4.9" r=".95" /></symbol>
+      <symbol id="i-balance" viewBox="0 0 16 16"><path d="M2 8h12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /><path d="M2.5 5v6M13.5 5v6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /><circle cx="8" cy="8" r="2.2" /></symbol>
+    </svg>
 
+    <main class="app">
+      <section class="player" aria-label="Player">
+        <div class="display island">
+          <div class="screen">
+            <div class="clock is-idle" id="clock">
+              <svg class="state-icon"><use id="stateIcon" href="#i-stop" /></svg>
+              <span id="clockText">00:00</span>
+            </div>
+            <canvas id="canvas"></canvas>
+          </div>
+          <div class="now-playing">
+            <div class="station" id="station">No cartridge loaded</div>
+            <div class="title-row" id="titleRow"><span id="title" class="is-dim">Load a cartridge to start</span></div>
+            <div class="specs">
+              <span class="spec"><b id="kbps">--</b> kbps</span>
+              <span class="spec"><b id="khz">--</b> kHz</span>
+              <span class="channels">
+                <span class="channel" id="mono">Mono</span>
+                <span class="channel" id="stereo">Stereo</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sliders island">
+          <div class="slider-row">
+            <svg class="slider-icon"><use id="volumeIcon" href="#i-vol-2" /></svg>
+            <div class="slider" id="volumeSlider" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100">
+              <div class="slider-rail"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+            </div>
+            <span class="slider-value" id="volumeValue">50%</span>
+          </div>
+          <div class="slider-row">
+            <svg class="slider-icon"><use href="#i-balance" /></svg>
+            <div class="slider is-centered" id="balanceSlider" role="slider" tabindex="0" aria-label="Balance" aria-valuemin="-100" aria-valuemax="100" title="Double-click to center">
+              <div class="slider-rail"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+            </div>
+            <span class="slider-value" id="balanceValue">C</span>
+          </div>
+        </div>
+
+        <div class="transport island">
+          <button class="button accent icon" id="playButton" title="Play" aria-label="Play"><svg><use href="#i-play" /></svg></button>
+          <button class="button icon" id="pauseButton" title="Pause" aria-label="Pause"><svg><use href="#i-pause" /></svg></button>
+          <button class="button icon" id="stopButton" title="Stop" aria-label="Stop"><svg><use href="#i-stop" /></svg></button>
+          <button class="button icon" id="infoButton" title="Stream information" aria-label="Stream information"><svg><use href="#i-info" /></svg></button>
+          <button class="button icon" id="settingsButton" title="Settings" aria-label="Settings"><svg><use href="#i-settings" /></svg></button>
+        </div>
+      </section>
+
+      <section class="cartridges" id="cartridges" aria-label="Cartridges"></section>
+    </main>
+
+    <div class="dialog-backdrop" id="dialog" hidden>
+      <form class="dialog" id="dialogForm" role="dialog" aria-modal="true" aria-labelledby="dialogTitle" novalidate>
+        <div class="dialog-body">
+          <h2 id="dialogTitle">Load cartridge</h2>
+          <label class="field">Name
+            <input class="textbox" id="streamTitle" type="text" autocomplete="off" spellcheck="false" placeholder="My station" />
+          </label>
+          <label class="field">Stream URL
+            <input class="textbox" id="streamURL" type="text" autocomplete="off" spellcheck="false" placeholder="https://" />
+          </label>
+          <div class="dialog-error" id="dialogError" hidden></div>
+        </div>
+        <div class="dialog-footer">
+          <button class="button accent" type="submit">Save</button>
+          <button class="button" type="button" id="ejectButton">Eject</button>
+          <button class="button" type="button" id="cancelButton">Cancel</button>
+        </div>
+      </form>
     </div>
 
-    <div class="container-fluid px-4 text-center">
-      <div class="row">
-        <div class="col-6 ps-3">
-          <div class="row mt-2">
-            <div class="card text-bg-dark card-s-1">
-              <div class="card-body card-status-text single-line"><b>To start, please load a player.</b></div>
-            </div>
-          </div>
-          <div class="row mt-2">
-            <div class="card text-bg-dark card-s-2">
-              <div class="card-body"><canvas id="canvas"></canvas></div>
-            </div>
-          </div>
-          <div class="row mt-2">
-            <div class="card text-bg-dark card-s-3">
-              <div class="card-body d-flex align-items-center justify-content-center">
-                <a class="btn btn-success" onclick="start()"
-                  ><i class="bi bi-play-fill"></i
-                ></a>
-                <a class="btn btn-danger ms-1" onclick="stop()"
-                  ><i class="bi bi-stop-fill"></i
-                ></a>
-                <div class="volume ms-4">
-                  <i class="bi bi-volume-down-fill volume-icon" id="volumeIcon"></i>
-                  <div class="volume-slider" id="volumeSlider" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
-                    <div class="volume-rail">
-                      <div class="volume-fill"></div>
-                      <div class="volume-thumb"></div>
-                    </div>
-                  </div>
-                  <span class="volume-display" id="volumeDisplay">50%</span>
-                </div>
-                <a class="btn btn-info ms-4 nowplaying" type="button" style="visibility:hidden;" disabled>
-                  <span
-                    class="spinner-border spinner-border-sm"
-                    role="status"
-                    aria-hidden="true"
-                  ></span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-2 pe-1 ps-3">
-          <div class="cards-container">
-            <div class="card ppp player1 text-bg-secondary mt-2">
-              <div class="card-body card-body-player general-single-line"><p class="card-text player1-title">&nbsp;</p></div>
-              <div class="card-footer">
-                <small class="text-body-secondary"
-                  ><i class="bi bi-eject-fill text-white"></i
-                ></small>
-              </div>
-            </div>
-            <div class="card ppp player2 text-bg-secondary mt-2">
-              <div class="card-body card-body-player general-single-line"><p class="card-text player2-title">&nbsp;</p></div>
-              <div class="card-footer">
-                <small class="text-body-secondary"
-                  ><i class="bi bi-eject-fill text-white"></i
-                ></small>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-2 pe-1 ps-3">
-          <div class="cards-container">
-            <div class="card ppp player3 text-bg-secondary mt-2">
-              <div class="card-body card-body-player general-single-line"><p class="card-text player3-title">&nbsp;</p></div>
-              <div class="card-footer">
-                <small class="text-body-secondary"
-                  ><i class="bi bi-eject-fill text-white"></i
-                ></small>
-              </div>
-            </div>
-            <div class="card ppp player4 text-bg-secondary mt-2">
-              <div class="card-body card-body-player general-single-line"><p class="card-text player4-title">&nbsp;</p></div>
-              <div class="card-footer">
-                <small class="text-body-secondary"
-                  ><i class="bi bi-eject-fill text-white"></i
-                ></small>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-2 pe-1 ps-3">
-          <div class="cards-container">
-            <div class="card ppp player5 text-bg-secondary mt-2">
-              <div class="card-body card-body-player general-single-line"><p class="card-text player5-title">&nbsp;</p></div>
-              <div class="card-footer">
-                <small class="text-body-secondary"
-                  ><i class="bi bi-eject-fill text-white"></i
-                ></small>
-              </div>
-            </div>
-            <div class="card ppp player6 text-bg-secondary mt-2">
-              <div class="card-body card-body-player general-single-line"><p class="card-text player6-title">&nbsp;</p></div>
-              <div class="card-footer">
-                <small class="text-body-secondary"
-                  ><i class="bi bi-eject-fill text-white"></i
-                ></small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <audio id="audio" crossorigin="anonymous" preload="none"></audio>
 
-    <audio src="https://stream.c9.fr/c9radio-192.mp3" id="audio" crossorigin="anonymous"></audio>
-    <script src="js/bootstrap.bundle.min.js"></script>
-
+    <script src="js/bridge.js"></script>
     <script src="js/visualizer.js"></script>
     <script src="js/script.js"></script>
-
-    <script>
-      const { invoke } = window.__TAURI__.core;
-      const { listen } = window.__TAURI__.event;
-
-      function saveData(key, value) {
-        invoke("set_data", { key, value });
-      }
-
-      function deleteData(key) {
-        invoke("delete_data", { key });
-      }
-
-      async function loadData(key) {
-        const value = await invoke("get_data", { key });
-        return value === null ? undefined : value;
-      }
-
-      function proxied(url) {
-        return window.__QUST_PROXY__ + "?url=" + encodeURIComponent(url);
-      }
-
-      listen("play-action", () => {
-          start();
-      });
-
-      listen("stop-action", () => {
-          stop();
-      });
-
-    </script>
   </body>
 </html>

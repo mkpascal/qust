@@ -11,20 +11,19 @@
     const UPDATE = 1 / 60
     const PEAK_SPEED = 3.0
     const PEAK_FALLOFF = 1.6
-    const SHADES = {
-        classic: { bars: classicRows(), peak: "rgb(150, 150, 150)" },
-        white: { bars: [[0, "rgba(255, 255, 255, 0.45)"], [1, "rgba(255, 255, 255, 1)"]], peak: "#ffffff" }
-    }
+    const BAR_WIDTH = 3
+    const GRID_WIDTH = BARS * (BAR_WIDTH + 1) - 1
+    const GRID_HEIGHT = ROWS + 1
+    const CLASSIC = ["24,132,8", "41,148,0", "49,156,8", "57,181,16", "50,190,16", "41,206,16", "148,222,33", "189,222,41",
+        "214,181,33", "222,165,24", "198,123,8", "214,115,0", "214,102,0", "214,90,0", "206,41,16", "239,49,16"]
 
-    function classicRows() {
-        const rows = ["24,132,8", "41,148,0", "49,156,8", "57,181,16", "50,190,16", "41,206,16", "148,222,33", "189,222,41",
-            "214,181,33", "222,165,24", "198,123,8", "214,115,0", "214,102,0", "214,90,0", "206,41,16", "239,49,16"]
-        const stops = []
-        rows.forEach((rgb, r) => {
-            stops.push([r / (ROWS + 1), `rgb(${rgb})`])
-            stops.push([(r + 1) / (ROWS + 1), `rgb(${rgb})`])
-        })
-        return stops
+    function palette(name, color) {
+        if (name === "classic") return { rows: CLASSIC.map((rgb) => `rgb(${rgb})`), peak: "rgb(150, 150, 150)" }
+        const hex = /^#([0-9a-f]{6})$/i.test(color || "") && name === "accent" ? color.slice(1) : "ffffff"
+        const rgb = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")
+        const rows = []
+        for (let r = 0; r < GRID_HEIGHT; r++) rows.push(`rgba(${rgb}, ${(0.45 + 0.55 * r / (GRID_HEIGHT - 1)).toFixed(3)})`)
+        return { rows, peak: `rgb(${rgb})` }
     }
 
     class Spectrum {
@@ -36,12 +35,24 @@
             this.gain = null
             this.wired = false
             this.failed = false
-            this.theme = "classic"
+            this.colors = palette("classic")
             this.state = this.newState()
-            this.canvas.addEventListener("dblclick", (event) => {
-                event.preventDefault()
-                this.theme = this.theme === "classic" ? "white" : "classic"
-            })
+            this.canvas.width = GRID_WIDTH
+            this.canvas.height = GRID_HEIGHT
+            this.fit()
+            window.addEventListener("resize", () => this.fit())
+        }
+
+        fit() {
+            const ratio = window.devicePixelRatio || 1
+            const scale = Math.max(1, Math.round(ratio))
+            this.canvas.style.width = `${GRID_WIDTH * scale / ratio}px`
+            this.canvas.style.height = `${GRID_HEIGHT * scale / ratio}px`
+        }
+
+        setColors(name, color) {
+            this.colors = palette(name, color)
+            if (this.frame) this.paint()
         }
 
         newState() {
@@ -76,8 +87,11 @@
                     this.gain = this.context.createGain()
                     this.gain.gain.value = this.element.volume
                     this.element.volume = 1
+                    this.panner = this.context.createStereoPanner()
+                    this.panner.pan.value = this.balance || 0
                     source.connect(this.gain)
-                    this.gain.connect(this.context.destination)
+                    this.gain.connect(this.panner)
+                    this.panner.connect(this.context.destination)
                     source.connect(splitter)
                     splitter.connect(this.analysers[0], 0)
                     splitter.connect(this.analysers[1], 1)
@@ -95,6 +109,20 @@
             } else {
                 this.element.volume = volume
             }
+        }
+
+        setBalance(balance) {
+            this.balance = balance
+            if (this.panner) this.panner.pan.value = balance
+        }
+
+        channels() {
+            if (!this.waves) return null
+            const silent = (wave) => wave.every((v) => v === 0)
+            const left = silent(this.waves[0])
+            const right = silent(this.waves[1])
+            if (left && right) return null
+            return left || right ? 1 : 2
         }
 
         sampleRate() {
@@ -119,13 +147,19 @@
             this.frame = requestAnimationFrame(tick)
         }
 
+        setLoading(loading) {
+            this.loading = loading
+        }
+
         stop() {
             if (this.frame) cancelAnimationFrame(this.frame)
             this.frame = null
+            this.loading = false
+            this.loaderLevel = 0
             this.state = this.newState()
             this.pending = 0
             this.values = null
-            this.canvas.getContext("2d").clearRect(0, 0, this.canvas.width, this.canvas.height)
+            this.canvas.getContext("2d").clearRect(0, 0, GRID_WIDTH, GRID_HEIGHT)
         }
 
         tables() {
@@ -320,7 +354,13 @@
         }
 
         draw(dt) {
-            if (!this.wired) return
+            this.loaderTime = (this.loaderTime || 0) + dt
+            this.loaderLevel = this.loading ? Math.min(1, (this.loaderLevel || 0) + dt / 0.2) : Math.max(0, (this.loaderLevel || 0) - dt / 0.5)
+            if (this.wired) this.analyse(dt)
+            this.paint()
+        }
+
+        analyse(dt) {
             this.pending = (this.pending || 0) + dt
             let updates = 0
             while (this.pending >= UPDATE * 0.75 && updates < 4) {
@@ -339,45 +379,53 @@
                 }
                 this.step(this.state, this.values, UPDATE)
             }
-            this.paint()
         }
 
         paint() {
-            const canvas = this.canvas
-            const state = this.state
-            const ratio = window.devicePixelRatio || 1
-            const width = Math.round(canvas.clientWidth * ratio)
-            const height = Math.round(canvas.clientHeight * ratio)
-            if (!width || !height) return
-            if (canvas.width !== width || canvas.height !== height) {
-                canvas.width = width
-                canvas.height = height
-                this.gradient = null
+            const ctx = this.canvas.getContext("2d")
+            ctx.clearRect(0, 0, GRID_WIDTH, GRID_HEIGHT)
+            const level = this.loaderLevel || 0
+            if (level < 1) {
+                ctx.globalAlpha = 1 - level
+                this.paintBars(ctx)
             }
-            const ctx = canvas.getContext("2d")
-            if (!this.gradient || this.gradientTheme !== this.theme) {
-                this.gradient = ctx.createLinearGradient(0, height, 0, 0)
-                SHADES[this.theme].bars.forEach(([stop, color]) => this.gradient.addColorStop(stop, color))
-                this.gradientTheme = this.theme
+            if (level > 0) {
+                ctx.globalAlpha = level
+                this.paintLoader(ctx)
             }
-            ctx.clearRect(0, 0, width, height)
-            const gap = Math.max(1, Math.round(2 * ratio))
-            const barWidth = Math.max(1, Math.floor((width - gap * (BARS - 1)) / BARS))
-            const offset = Math.floor((width - (barWidth * BARS + gap * (BARS - 1))) / 2)
-            const peakHeight = Math.max(1, Math.round(2 * ratio))
-            const row = height / (ROWS + 1)
+            ctx.globalAlpha = 1
+        }
+
+        paintLoader(ctx) {
+            const alpha = ctx.globalAlpha
+            const head = ((this.loaderTime / 1.1) % 1) * (BARS + 6) - 3
+            const middle = GRID_HEIGHT / 2
             for (let i = 0; i < BARS; i++) {
-                const x = offset + i * (barWidth + gap)
-                const barHeight = Math.round(state.bars[i] / 16 * row)
-                if (barHeight > 0) {
-                    ctx.fillStyle = this.gradient
-                    ctx.fillRect(x, height - barHeight, barWidth, barHeight)
+                const pulse = Math.max(0, 1 - Math.abs(i - head) / 3)
+                const half = 1 + Math.round(pulse * 5)
+                const x = i * (BAR_WIDTH + 1)
+                ctx.globalAlpha = alpha * (0.3 + 0.7 * pulse)
+                for (let r = middle - half; r < middle + half; r++) {
+                    ctx.fillStyle = this.colors.rows[r]
+                    ctx.fillRect(x, GRID_HEIGHT - 1 - r, BAR_WIDTH, 1)
                 }
-                const peakRows = (state.tops[i] - Math.floor((state.tops[i] - state.peaks[i]) / 256) * 256) / 256
-                const peakY = height - Math.round(peakRows * row)
+            }
+            ctx.globalAlpha = alpha
+        }
+
+        paintBars(ctx) {
+            for (let i = 0; i < BARS; i++) {
+                const x = i * (BAR_WIDTH + 1)
+                const rows = Math.min(ROWS, Math.round(this.state.bars[i] / 16))
+                for (let r = 0; r < rows; r++) {
+                    ctx.fillStyle = this.colors.rows[r]
+                    ctx.fillRect(x, GRID_HEIGHT - 1 - r, BAR_WIDTH, 1)
+                }
+                const tops = this.state.tops[i]
+                const peakRows = Math.round((tops - Math.floor((tops - this.state.peaks[i]) / 256) * 256) / 256)
                 if (peakRows >= 1) {
-                    ctx.fillStyle = SHADES[this.theme].peak
-                    ctx.fillRect(x, Math.max(0, peakY - peakHeight), barWidth, peakHeight)
+                    ctx.fillStyle = this.colors.peak
+                    ctx.fillRect(x, GRID_HEIGHT - 1 - Math.min(ROWS, peakRows), BAR_WIDTH, 1)
                 }
             }
         }
