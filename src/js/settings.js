@@ -52,7 +52,6 @@ autoplayToggle.addEventListener('change', () => change('autoplay', 'autoplay', a
 
 /* Global shortcuts */
 
-const SHORTCUT_HINT = "Works even when Qust isn't focused";
 const MODIFIER_CODES = ['ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'ShiftLeft', 'ShiftRight', 'MetaLeft', 'MetaRight'];
 const shortcutButtons = [...document.querySelectorAll('.shortcut')];
 let shortcuts = {};
@@ -64,17 +63,22 @@ function renderShortcuts(errors = {}) {
         const binding = shortcuts[action];
         const status = document.querySelector(`[data-status="${action}"]`);
         const isRecording = recording === action;
+        const assigned = !!binding && !!binding.accelerator;
         button.classList.toggle('is-recording', isRecording);
-        button.classList.toggle('is-unavailable', !!binding && !binding.registered && !isRecording);
+        button.classList.toggle('is-unavailable', assigned && !binding.registered && !isRecording);
+        button.classList.toggle('is-unassigned', !assigned && !isRecording);
         button.replaceChildren(...(isRecording
             ? [document.createTextNode('Press a shortcut…')]
-            : binding ? shortcutKeys(binding.accelerator).map((key) => Object.assign(document.createElement('kbd'), { textContent: key })) : []));
+            : assigned ? shortcutKeys(binding.accelerator).map((key) => Object.assign(document.createElement('kbd'), { textContent: key }))
+            : [document.createTextNode('Not set')]));
 
-        let text = SHORTCUT_HINT;
+        // The description doubles as the status line; its original text is the hint.
+        if (!status.dataset.hint) status.dataset.hint = status.textContent;
+        let text = status.dataset.hint;
         let error = false;
-        if (isRecording) text = 'Esc to cancel, Backspace for the default';
+        if (isRecording) text = 'Esc to cancel, Backspace to reset';
         else if (errors[action]) [text, error] = [errors[action], true];
-        else if (binding && !binding.registered) [text, error] = ['Another app is using this shortcut. Pick a different one.', true];
+        else if (assigned && !binding.registered) [text, error] = ['Another app is using this shortcut. Pick a different one.', true];
         status.textContent = text;
         status.classList.toggle('is-error', error);
     }
@@ -125,6 +129,29 @@ document.addEventListener('keydown', (event) => {
 
 window.addEventListener('blur', () => {
     if (recording) finishRecording(null);
+});
+
+/* Background helper (background.rs) */
+
+const backgroundToggle = document.getElementById('backgroundToggle');
+const backgroundLabel = document.getElementById('backgroundLabel');
+const backgroundStatus = document.getElementById('backgroundStatus');
+
+function renderBackground(background, error) {
+    backgroundToggle.checked = background.enabled;
+    backgroundLabel.textContent = background.enabled ? 'On' : 'Off';
+    if (!backgroundStatus.dataset.hint) backgroundStatus.dataset.hint = backgroundStatus.textContent;
+    backgroundStatus.textContent = error || backgroundStatus.dataset.hint;
+    backgroundStatus.classList.toggle('is-error', !!error);
+}
+
+backgroundToggle.addEventListener('change', async () => {
+    const enabled = backgroundToggle.checked;
+    try {
+        renderBackground(await invoke('set_background', { enabled }));
+    } catch (error) {
+        renderBackground({ enabled: !enabled }, String(error));
+    }
 });
 
 /* Updates (updater.rs) */
@@ -212,5 +239,6 @@ listen('update-status', ({ payload }) => {
     document.getElementById('version').textContent = version;
     update = await invoke('update_status');
     renderUpdate();
+    renderBackground(await invoke('get_background'));
     render();
 })();

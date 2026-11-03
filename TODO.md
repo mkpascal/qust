@@ -13,8 +13,6 @@ Ideas for the settings window, roughly in order of usefulness.
 ## Window and system
 
 - [ ] Always on top.
-- [ ] Start with Windows.
-- [ ] Minimize or close to the system tray, with play/stop in the tray menu.
 - [ ] Compact mode: just the player, without the cartridges.
 
 ## Appearance

@@ -685,6 +685,10 @@ listen('play-action', () => {
     if (state === 'stopped' || state === 'paused') play();
 });
 listen('stop-action', stop);
+listen('toggle-action', () => {
+    if (state === 'stopped' || state === 'paused') play();
+    else stop();
+});
 
 /* Startup */
 
@@ -711,5 +715,7 @@ listen('stop-action', stop);
 
     setState('stopped');
     renderInfo();
-    if (settings.autoplay && activeSlot !== null) play();
+    // Opened by the background helper to play (Play / Stop / Start pressed while Qust was closed).
+    const requested = await invoke('take_play_request');
+    if ((requested || settings.autoplay) && activeSlot !== null) play();
 })();

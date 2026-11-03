@@ -28,6 +28,7 @@ You need Rust (stable, via rustup), plus the MSVC build tools on Windows (WebVie
   - `proxy.rs`: the local stream proxy (see below).
   - `shortcuts.rs`: the customizable global shortcuts.
   - `updater.rs`: the auto-updater.
+  - `background.rs`: the background helper (tray, start with Windows, opening the player on demand).
 - `src-tauri/icons/`: generated with `npx tauri icon build/icons/icon.png`. Delete the `android/`, `ios/`, `Square*` and `StoreLogo` outputs afterwards. `build/icons/icon.png` is the source, a rounded square with transparent corners, and is also used by the README.
 - `assets/screenshot.png`: README screenshot of the player window.
 - `TODO.md`: planned settings and features.
@@ -50,8 +51,8 @@ Format, sample rate and channels come from the headers (`icy-br`, `ice-audio-inf
 - `player1-title` / `player1-url` through `player6-*`: the cartridges
 - `last-selected-player` / `-title` / `-url`: the last cartridge played
 - `volume`, `balance`
-- `theme`, `visualizer-colors` (`classic` / `white` / `accent`), `autoplay`
-- `shortcut-play`, `shortcut-stop`
+- `theme`, `visualizer-colors` (`classic` / `white` / `accent`), `autoplay`, `background`
+- `shortcut-play`, `shortcut-stop`, `shortcut-toggle` (empty string = no shortcut)
 
 The first run imports the Electron version's `<config dir>/qust/config.json`. `loadData` turns Rust's `null` into `undefined`.
 
@@ -63,11 +64,18 @@ The first run imports the Electron version's `<config dir>/qust/config.json`. `l
 - `settings-changed` `{ key, value }`: Settings → player. Includes `key: "shortcuts"` from Rust.
 - `player-status`: player → info, every second and on state changes.
 - `player-status-request`: info → player, sent when the info window opens.
-- `play-action` / `stop-action`: global shortcuts → player.
+- `play-action` / `stop-action` / `toggle-action`: global shortcuts → player.
+
+**Background helper.** With `background` on ("Background helper" in Settings), `tauri-plugin-autostart` adds a Windows startup entry that runs `qust.exe --background`.
+- **At sign-in:** that launch creates only the tray icon (`background::create_tray`), with no window.
+- **Closing the player:** the window is destroyed, and the `RunEvent::ExitRequested` handler keeps the process alive (`code: None` means "last window closed"). The tray's "Quit Qust" exits with a code, so it gets through.
+- **Shortcuts and tray actions:** they go through `background::player_action`. With no player window, Play and Play / Stop / Start open it (`show_player(app, true)` → `PlayRequest`, which the page reads with `take_play_request` once loaded and then plays the last cartridge). Stop does nothing.
+- **Single instance:** `tauri-plugin-single-instance` (registered first) sends a second launch to the running process. A plain launch shows the player, and `qust.exe --toggle` acts like Play / Stop / Start. A first launch with `--toggle` opens and plays.
+- **Memory:** with the window closed, the idle process holds no webview.
 
 **Updates.** `tauri-plugin-updater` reads `https://github.com/mkpascal/qust/releases/latest/download/latest.json`, and the public key is in `tauri.conf.json` > `plugins.updater`. `updater.rs` checks GitHub, downloads a newer version in the background (status `ready`), and installs it only when the user clicks "Restart and update" in Settings. A dot on the cog shows that an update is waiting. The NSIS installer (passive mode) closes Qust and reopens it. When "Check automatically" (`auto-update`, on by default) is on, it checks 30 s after launch and then whenever `update-last-check` is 8 hours old. Only the installed version updates: `installed()` is false for debug builds and for an exe without `uninstall.exe` next to it (the portable copy). Status reaches the pages as `update-status` events.
 
-**Global shortcuts.** `shortcuts.rs` keeps the bindings as accelerators built from `KeyboardEvent.code` (default `Ctrl+Alt+Insert` / `Ctrl+Alt+KeyH`). While Settings records one, it calls `pause_shortcuts(true)`, because a registered shortcut never reaches the page. `set_shortcut` refuses shortcuts another app owns or that are already used by the other action. Closing the Settings window always resumes them. A shortcut owned by another app at startup is kept but marked unregistered, and Settings shows it crossed out.
+**Global shortcuts.** `shortcuts.rs` keeps the bindings as accelerators built from `KeyboardEvent.code` (Play `Ctrl+Alt+Insert`, Stop `Ctrl+Alt+KeyH`, Play / Stop unassigned). Play / Stop plays when stopped or paused and stops otherwise. It exists so a single Stream Deck "Hotkey" button stays in sync, which a "Hotkey Switch" with separate Play and Stop keys does not. Backspace while recording resets a shortcut to its default, which clears Play / Stop. While Settings records one, it calls `pause_shortcuts(true)`, because a registered shortcut never reaches the page. `set_shortcut` refuses shortcuts another app owns or that are already used by another action. Closing the Settings window always resumes them. A shortcut owned by another app at startup is kept but marked unregistered, and Settings shows it crossed out.
 
 ## Debugging and testing
 

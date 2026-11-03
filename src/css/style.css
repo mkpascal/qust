@@ -921,6 +921,10 @@ body.settings-window::-webkit-scrollbar-thumb {
   text-align: center;
 }
 
+.shortcut.is-unassigned {
+  color: var(--text-3);
+}
+
 .shortcut.is-unavailable kbd {
   background: var(--control-hover);
   color: var(--text-2);

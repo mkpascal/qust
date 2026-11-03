@@ -1,6 +1,7 @@
 // Global shortcuts, customizable in the settings window. Stored as accelerator strings
-// ("Ctrl+Alt+Insert") under shortcut-play / shortcut-stop. A shortcut another program already owns
-// can't be registered: it is kept but reported as unavailable.
+// ("Ctrl+Alt+Insert") under shortcut-play / shortcut-stop / shortcut-toggle; an empty string means
+// no shortcut. A shortcut another program already owns can't be registered: it is kept but
+// reported as unavailable.
 
 use crate::store::Store;
 use serde_json::{json, Value};
@@ -10,9 +11,12 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
 // (action, storage key, default). Pressing the shortcut emits "<action>-action" to the windows.
-const ACTIONS: [(&str, &str, &str); 2] = [
+// Play/Stop ("toggle") starts unassigned: one key that follows Qust's state, for a single
+// Stream Deck button that can't get out of sync.
+const ACTIONS: [(&str, &str, &str); 3] = [
     ("play", "shortcut-play", "Ctrl+Alt+Insert"),
     ("stop", "shortcut-stop", "Ctrl+Alt+KeyH"),
+    ("toggle", "shortcut-toggle", ""),
 ];
 
 struct Binding {
@@ -31,7 +35,7 @@ pub fn handle(app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent) {
     let bindings = app.state::<Shortcuts>();
     let action = bindings.0.lock().unwrap().iter().find(|(_, binding)| binding.shortcut.as_ref() == Some(shortcut)).map(|(action, _)| *action);
     if let Some(action) = action {
-        let _ = app.emit(&format!("{action}-action"), ());
+        crate::background::player_action(app, action);
     }
 }
 
@@ -68,8 +72,14 @@ pub fn set_shortcut(app: AppHandle, bindings: State<Shortcuts>, store: State<Sto
         return Err("Unknown action".into());
     };
     let accelerator = if accelerator.is_empty() { default.to_string() } else { accelerator };
-    let shortcut = accelerator.parse::<Shortcut>().map_err(|_| "That isn't a valid shortcut".to_string())?;
     let mut bindings = bindings.0.lock().unwrap();
+    if accelerator.is_empty() {
+        store.set(key, Value::String(String::new()));
+        bindings.insert(action, Binding { accelerator, shortcut: None, registered: false });
+        let _ = app.emit("settings-changed", json!({ "key": "shortcuts", "value": describe(&bindings) }));
+        return Ok(describe(&bindings));
+    }
+    let shortcut = accelerator.parse::<Shortcut>().map_err(|_| "That isn't a valid shortcut".to_string())?;
     if bindings.iter().any(|(other, binding)| *other != action && binding.shortcut == Some(shortcut)) {
         return Err("Already used for another action".into());
     }

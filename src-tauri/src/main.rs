@@ -1,12 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod background;
 mod proxy;
 mod shortcuts;
 mod store;
 mod updater;
 
-use tauri::{AppHandle, Manager, State, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
-
+use tauri::{AppHandle, Manager, RunEvent, State, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
 // Injected into every window as window.__QUST__ (see src/js/bridge.js).
 struct PageConfig {
@@ -16,10 +16,25 @@ struct PageConfig {
 
 fn main() {
     tauri::Builder::default()
+        // First, so a second launch (Start menu while the helper runs) just shows this instance.
+        // `qust.exe --toggle` acts like the Play / Stop / Start shortcut (e.g. from a Stream Deck
+        // "Open" action).
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if args.iter().any(|arg| arg == background::TOGGLE_ARG) {
+                background::player_action(app, "toggle");
+            } else if !args.iter().any(|arg| arg == background::LAUNCH_ARG) {
+                background::show_player(app, false);
+            }
+        }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(shortcuts::handle).build())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![background::LAUNCH_ARG]),
+        ))
         .manage(shortcuts::Shortcuts::default())
         .manage(updater::Updates::default())
+        .manage(background::PlayRequest::default())
         .invoke_handler(tauri::generate_handler![
             store::get_data,
             store::set_data,
@@ -30,6 +45,9 @@ fn main() {
             updater::update_status,
             updater::check_for_updates,
             updater::install_update,
+            background::get_background,
+            background::set_background,
+            background::take_play_request,
             open_panel,
             set_theme
         ])
@@ -50,13 +68,34 @@ fn main() {
             });
             app.manage(PageConfig { script: format!("window.__QUST__ = {config};"), mica });
 
-            build_window(app.handle(), "main", "index.html", "Qust", (860.0, 267.0), None)?;
+            // Started by Windows with the helper on: tray only, the player opens on demand.
+            if background::enabled(app.handle()) {
+                background::create_tray(app.handle())?;
+            }
+            if background::launched_with(background::TOGGLE_ARG) {
+                background::show_player(app.handle(), true);
+            } else if !(background::enabled(app.handle()) && background::launched_with(background::LAUNCH_ARG)) {
+                build_player(app.handle())?;
+            }
             shortcuts::register_saved(app.handle());
             updater::schedule(app.handle().clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Qust");
+        .build(tauri::generate_context!())
+        .expect("error while running Qust")
+        .run(|app, event| {
+            // With the helper on, closing the last window leaves Qust running in the tray; "Quit
+            // Qust" in the tray menu exits with a code, which is let through.
+            if let RunEvent::ExitRequested { api, code: None, .. } = event {
+                if background::enabled(app) {
+                    api.prevent_exit();
+                }
+            }
+        });
+}
+
+pub fn build_player(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    build_window(app, "main", "index.html", "Qust", (860.0, 267.0), None)
 }
 
 fn build_window(
@@ -127,7 +166,7 @@ fn stored_theme(app: &AppHandle) -> Option<Theme> {
 #[tauri::command]
 async fn open_panel(app: AppHandle, name: String) -> Result<(), String> {
     let (page, title, size) = match name.as_str() {
-        "settings" => ("settings.html", "Qust settings", (520.0, 700.0)),
+        "settings" => ("settings.html", "Qust settings", (520.0, 850.0)),
         "info" => ("info.html", "Stream information", (580.0, 590.0)),
         _ => return Err(format!("unknown panel {name}")),
     };
