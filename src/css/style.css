@@ -641,6 +641,39 @@ svg {
   animation-delay: -0.6s;
 }
 
+/* Reordering by drag and drop (script.js) */
+
+.cartridge.is-dragging {
+  opacity: 0.35;
+}
+
+.cartridge.is-drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cartridge-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: var(--dialog);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.cartridge-ghost.is-active {
+  background: var(--accent);
+}
+
+.cartridge.is-dropped {
+  animation: dropped 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+@keyframes dropped {
+  from { transform: scale(0.94); }
+}
+
 @keyframes equalizer {
   from { transform: scaleY(0.25); }
   to { transform: scaleY(1); }
@@ -1058,6 +1091,7 @@ body.settings-window::-webkit-scrollbar-thumb {
 @media (prefers-reduced-motion: reduce) {
   .title-row.is-scrolling span,
   .equalizer i,
+  .cartridge.is-dropped,
   .dialog {
     animation: none;
   }

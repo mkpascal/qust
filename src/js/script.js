@@ -275,6 +275,104 @@ function selectSlot(slot) {
     play();
 }
 
+/* Reordering: drag a cartridge onto another slot to swap them, or onto an empty slot to move it.
+   Pointer events rather than HTML drag and drop, which Tauri takes over on Windows for file drops. */
+
+const DRAG_THRESHOLD = 5;
+let drag = null;
+let suppressClick = false;
+
+function saveSlot(slot) {
+    const cartridge = cartridges[slot];
+    if (cartridge) {
+        saveData(`player${slot + 1}-title`, cartridge.title);
+        saveData(`player${slot + 1}-url`, cartridge.url);
+    } else {
+        deleteData(`player${slot + 1}-title`);
+        deleteData(`player${slot + 1}-url`);
+    }
+}
+
+function moveCartridge(from, to) {
+    [cartridges[from], cartridges[to]] = [cartridges[to], cartridges[from]];
+    saveSlot(from);
+    saveSlot(to);
+    if (activeSlot === from) activeSlot = to;
+    else if (activeSlot === to) activeSlot = from;
+    if (activeSlot !== null) saveData('last-selected-player', 'player' + (activeSlot + 1));
+    renderCartridges();
+    for (const slot of [from, to]) {
+        const element = ui.cartridges.children[slot];
+        element.classList.remove('is-dropped');
+        void element.offsetWidth;
+        element.classList.add('is-dropped');
+        element.addEventListener('animationend', function done(event) {
+            if (event.animationName !== 'dropped') return;
+            element.classList.remove('is-dropped');
+            element.removeEventListener('animationend', done);
+        });
+    }
+}
+
+function endDrag(drop) {
+    if (!drag) return;
+    const { active, slot, target, ghost, element } = drag;
+    drag = null;
+    if (!active) return;
+    ghost.remove();
+    element.classList.remove('is-dragging');
+    [...ui.cartridges.children].forEach((child) => child.classList.remove('is-drop-target'));
+    suppressClick = true;
+    if (drop && target !== null) moveCartridge(slot, target);
+}
+
+ui.cartridges.addEventListener('pointerdown', (event) => {
+    suppressClick = false;
+    if (event.button !== 0 || event.target.closest('.cartridge-eject')) return;
+    const element = event.target.closest('.cartridge');
+    const slot = [...ui.cartridges.children].indexOf(element);
+    if (slot < 0 || !cartridges[slot]) return;
+    drag = { slot, element, pointerId: event.pointerId, x: event.clientX, y: event.clientY, active: false, target: null };
+});
+
+document.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (!drag.active) {
+        if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < DRAG_THRESHOLD) return;
+        const rect = drag.element.getBoundingClientRect();
+        drag.active = true;
+        drag.offsetX = drag.x - rect.left;
+        drag.offsetY = drag.y - rect.top;
+        drag.ghost = drag.element.cloneNode(true);
+        drag.ghost.classList.remove('is-dropped', 'is-drop-target');
+        drag.ghost.classList.add('cartridge-ghost');
+        drag.ghost.style.width = `${rect.width}px`;
+        drag.ghost.style.height = `${rect.height}px`;
+        document.body.appendChild(drag.ghost);
+        drag.element.classList.add('is-dragging');
+    }
+    drag.ghost.style.transform = `translate(${event.clientX - drag.offsetX}px, ${event.clientY - drag.offsetY}px) scale(1.04)`;
+    const over = document.elementFromPoint(event.clientX, event.clientY);
+    const slot = over && over.closest('.cartridge') ? [...ui.cartridges.children].indexOf(over.closest('.cartridge')) : -1;
+    drag.target = slot >= 0 && slot !== drag.slot ? slot : null;
+    [...ui.cartridges.children].forEach((child, index) => child.classList.toggle('is-drop-target', index === drag.target));
+});
+
+document.addEventListener('pointerup', (event) => {
+    if (drag && event.pointerId === drag.pointerId) endDrag(true);
+});
+document.addEventListener('pointercancel', () => endDrag(false));
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && drag) endDrag(false);
+});
+
+// The click that ends a drag must not also play or open the cartridge.
+ui.cartridges.addEventListener('click', (event) => {
+    if (!suppressClick) return;
+    suppressClick = false;
+    event.stopPropagation();
+}, true);
+
 /* Dialog */
 
 function openDialog(slot) {
