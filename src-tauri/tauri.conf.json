@@ -15,7 +15,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "app", "dmg"],
+    "targets": [
+      "nsis",
+      "app",
+      "dmg"
+    ],
     "category": "Music",
     "shortDescription": "Quick Streaming Player",
     "icon": [
@@ -25,5 +29,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE0MDlGREM4NTgxNDFBNEYKUldSUEdoUll5UDBKRkpoWWJHU2JPZHdmOFZHaVhhSlhaTk5JeVkyaytOVzlIZlZHS1FrQ294SmYK",
+      "endpoints": [
+        "https://github.com/mkpascal/qust/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

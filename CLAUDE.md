@@ -27,6 +27,7 @@ You need Rust (stable, via rustup), plus the MSVC build tools on Windows (WebVie
   - `store.rs`: settings in `settings.json` in the app config dir (`%APPDATA%\com.pascalmuangkhot.qust`), through `get_data` / `set_data` / `delete_data`.
   - `proxy.rs`: the local stream proxy (see below).
   - `shortcuts.rs`: the customizable global shortcuts.
+  - `updater.rs`: the auto-updater.
 - `src-tauri/icons/`: generated with `npx tauri icon build/icons/icon.png`. Delete the `android/`, `ios/`, `Square*` and `StoreLogo` outputs afterwards. `build/icons/icon.png` is the source, a rounded square with transparent corners, and is also used by the README.
 - `assets/screenshot.png`: README screenshot of the player window.
 - `TODO.md`: planned settings and features.
@@ -64,6 +65,8 @@ The first run imports the Electron version's `<config dir>/qust/config.json`. `l
 - `player-status-request`: info → player, sent when the info window opens.
 - `play-action` / `stop-action`: global shortcuts → player.
 
+**Updates.** `tauri-plugin-updater` reads `https://github.com/mkpascal/qust/releases/latest/download/latest.json`, and the public key is in `tauri.conf.json` > `plugins.updater`. `updater.rs` checks GitHub, downloads a newer version in the background (status `ready`), and installs it only when the user clicks "Restart and update" in Settings. A dot on the cog shows that an update is waiting. The NSIS installer (passive mode) closes Qust and reopens it. When "Check automatically" (`auto-update`, on by default) is on, it checks 30 s after launch and then whenever `update-last-check` is 8 hours old. Only the installed version updates: `installed()` is false for debug builds and for an exe without `uninstall.exe` next to it (the portable copy). Status reaches the pages as `update-status` events.
+
 **Global shortcuts.** `shortcuts.rs` keeps the bindings as accelerators built from `KeyboardEvent.code` (default `Ctrl+Alt+Insert` / `Ctrl+Alt+KeyH`). While Settings records one, it calls `pause_shortcuts(true)`, because a registered shortcut never reaches the page. `set_shortcut` refuses shortcuts another app owns or that are already used by the other action. Closing the Settings window always resumes them. A shortcut owned by another app at startup is kept but marked unregistered, and Settings shows it crossed out.
 
 ## Debugging and testing
@@ -80,9 +83,13 @@ Release builds have no DevTools. To drive the app from a script, start it with `
 - Native menu `accelerator` strings must parse, or `Menu.new` throws. `script.js` retries without them.
 - macOS builds are unsigned and not notarized, so the first launch needs right-click → Open.
 
-## CI
+## Releases and CI
 
-`.github/workflows/build.yml` builds Windows (NSIS installer) and macOS (universal `.dmg`) with `tauri-apps/tauri-action` on pushes to `main`, pull requests and manual runs, and keeps the installers as workflow artifacts. Pushing a `v*` tag also creates one draft GitHub release that both platforms upload to.
+`.github/workflows/build.yml` builds Windows (NSIS installer) and macOS (universal `.dmg`) with `tauri-apps/tauri-action` on pushes to `main`, pull requests and manual runs, and keeps the installers as workflow artifacts.
+
+To release, bump `version` in `package.json` (and in `src-tauri/Cargo.toml` to match) and push to `main`. When no release exists for that version, the `release` job creates a draft "Qust vX.Y.Z". Both builds then add `src-tauri/tauri.release.conf.json` (`createUpdaterArtifacts`), sign the update files and upload them with `latest.json`. The `publish` job makes the release public and latest once both builds succeed, so installed copies only ever see a complete release.
+
+Signing needs the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The key pair lives in `C:\Users\p\.tauri\` (`qust.key`, `qust.key.password`, `qust.key.pub`). If the private key is lost, installed copies can't verify new updates, so it must stay backed up. Local `npm run build` doesn't sign and needs no key.
 
 ## License
 

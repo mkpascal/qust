@@ -481,6 +481,16 @@ function openInfo() {
 }
 
 ui.settingsButton.addEventListener('click', openSettings);
+
+// A dot on the cog when a downloaded update is waiting (installed from Settings).
+function showUpdate(update) {
+    const ready = update.status === 'ready';
+    ui.settingsButton.classList.toggle('has-update', ready);
+    ui.settingsButton.title = ready ? `Settings: version ${update.version} is ready to install` : 'Settings';
+}
+
+listen('update-status', ({ payload }) => showUpdate(payload));
+invoke('update_status').then(showUpdate);
 ui.infoButton.addEventListener('click', openInfo);
 
 /* Player status for the Stream information window (info.js): sent every second, on state

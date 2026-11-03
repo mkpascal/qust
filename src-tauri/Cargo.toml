@@ -1,6 +1,6 @@
 [package]
 name = "qust"
-version = "1.0.0"
+version = "1.1.0"
 description = "Quick Streaming Player"
 authors = ["Pascal Muang Khot"]
 license = "GPL-3.0-or-later"
@@ -15,6 +15,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-global-shortcut = "2"
 serde_json = "1"
 ureq = "2"
+tauri-plugin-updater = "2.14.1"
 
 [profile.release]
 codegen-units = 1

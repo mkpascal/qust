@@ -127,6 +127,75 @@ window.addEventListener('blur', () => {
     if (recording) finishRecording(null);
 });
 
+/* Updates (updater.rs) */
+
+const updateButton = document.getElementById('updateButton');
+const updateStatus = document.getElementById('updateStatus');
+const autoUpdateToggle = document.getElementById('autoUpdateToggle');
+const autoUpdateLabel = document.getElementById('autoUpdateLabel');
+let update = {};
+
+function ago(timestamp) {
+    const seconds = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+    return `${Math.floor(seconds / 86400)} days ago`;
+}
+
+function renderUpdate() {
+    const checked = update.lastCheck ? `Last checked ${ago(update.lastCheck)}.` : 'Not checked yet.';
+    let text = checked;
+    let label = 'Check for updates';
+    let busy = false;
+    let error = false;
+    if (!update.installed) {
+        text = 'Updates work in the installed version of Qust.';
+        busy = true;
+    } else if (update.status === 'checking') {
+        text = 'Checking for updates…';
+        busy = true;
+    } else if (update.status === 'downloading') {
+        text = `Downloading version ${update.version}… ${update.progress || 0}%`;
+        busy = true;
+    } else if (update.status === 'ready') {
+        text = `Version ${update.version} is ready to install.`;
+        label = 'Restart and update';
+    } else if (update.status === 'installing') {
+        text = 'Installing…';
+        busy = true;
+    } else if (update.status === 'error') {
+        text = `Couldn't update: ${update.error}`;
+        label = 'Try again';
+        error = true;
+    } else if (update.status === 'current') {
+        text = `You're up to date. ${checked}`;
+    }
+    updateStatus.textContent = text;
+    updateStatus.classList.toggle('is-error', error);
+    updateButton.textContent = label;
+    updateButton.disabled = busy;
+    updateButton.classList.toggle('accent', update.status === 'ready');
+    autoUpdateToggle.disabled = !update.installed;
+    autoUpdateToggle.checked = update.auto !== false;
+    autoUpdateLabel.textContent = autoUpdateToggle.checked ? 'On' : 'Off';
+}
+
+updateButton.addEventListener('click', () => {
+    invoke(update.status === 'ready' ? 'install_update' : 'check_for_updates').catch(() => {});
+});
+
+autoUpdateToggle.addEventListener('change', () => {
+    update.auto = autoUpdateToggle.checked;
+    saveData('auto-update', autoUpdateToggle.checked);
+    renderUpdate();
+});
+
+listen('update-status', ({ payload }) => {
+    update = payload;
+    renderUpdate();
+});
+
 (async function init() {
     const [theme, colors, autoplay, version, bindings] = await Promise.all([
         loadData('theme'),
@@ -141,5 +210,7 @@ window.addEventListener('blur', () => {
     if (colors in COLORS) settings.colors = colors;
     settings.autoplay = autoplay === true;
     document.getElementById('version').textContent = version;
+    update = await invoke('update_status');
+    renderUpdate();
     render();
 })();

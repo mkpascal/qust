@@ -26,6 +26,7 @@
   - Shows the current song (ICY metadata), bitrate, sample rate and mono/stereo,
   - Stream information window with format, network, stability and ICY details,
   - Customizable global shortcuts (Ctrl + Alt + Insert / Ctrl + Alt + H by default),
+  - Updates itself from the GitHub releases (checks every 8 hours, installs when you restart),
   - Windows 11 look: Mica, light and dark themes, your accent color, native menus,
   - Compatible with all HTTP streaming servers (Icecast, SHOUTcast v2),
   - Supports Windows and macOS.
@@ -40,4 +41,4 @@ npm start        # run in development
 npm run build    # app and installer, copied to build/bin/
 ```
 
-Every push to `main` is built on GitHub Actions for Windows and macOS. Pushing a `v*` tag creates a draft release with the installers.
+Every push to `main` is built on GitHub Actions for Windows and macOS. Bumping the version in `package.json` publishes a [release](https://github.com/mkpascal/qust/releases), which installed copies of Qust update to.

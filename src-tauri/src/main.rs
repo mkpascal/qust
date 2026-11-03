@@ -3,6 +3,7 @@
 mod proxy;
 mod shortcuts;
 mod store;
+mod updater;
 
 use tauri::{AppHandle, Manager, State, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
@@ -16,7 +17,9 @@ struct PageConfig {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(shortcuts::handle).build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(shortcuts::Shortcuts::default())
+        .manage(updater::Updates::default())
         .invoke_handler(tauri::generate_handler![
             store::get_data,
             store::set_data,
@@ -24,6 +27,9 @@ fn main() {
             shortcuts::get_shortcuts,
             shortcuts::set_shortcut,
             shortcuts::pause_shortcuts,
+            updater::update_status,
+            updater::check_for_updates,
+            updater::install_update,
             open_panel,
             set_theme
         ])
@@ -46,6 +52,7 @@ fn main() {
 
             build_window(app.handle(), "main", "index.html", "Qust", (860.0, 267.0), None)?;
             shortcuts::register_saved(app.handle());
+            updater::schedule(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -120,7 +127,7 @@ fn stored_theme(app: &AppHandle) -> Option<Theme> {
 #[tauri::command]
 async fn open_panel(app: AppHandle, name: String) -> Result<(), String> {
     let (page, title, size) = match name.as_str() {
-        "settings" => ("settings.html", "Qust settings", (520.0, 560.0)),
+        "settings" => ("settings.html", "Qust settings", (520.0, 700.0)),
         "info" => ("info.html", "Stream information", (580.0, 590.0)),
         _ => return Err(format!("unknown panel {name}")),
     };
