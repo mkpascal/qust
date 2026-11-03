@@ -20,7 +20,7 @@
 
 
 **Qust** is an open-source, simple, **qu**ick **st**reaming player.
-  - Small, efficient native app (a 4.5 MB installer) that plays streams through a native audio element,
+  - Small, efficient native app (a 2 MB installer) that plays streams through a native audio element,
   - Features a cartridge-loading concept: six slots, saved with your volume, balance and settings,
   - Classic pixel spectrum analyzer that follows the sound precisely, with volume and balance controls,
   - Shows the current song (ICY metadata), bitrate, sample rate and mono/stereo,
