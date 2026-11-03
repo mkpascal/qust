@@ -2,11 +2,12 @@
   "name": "qust",
   "version": "1.0.0",
   "description": "Quick Streaming Player",
-  "main": "main.js",
+  "private": true,
   "scripts": {
-    "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "start": "tauri dev",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
   },
   "repository": {
     "type": "git",
@@ -19,38 +20,6 @@
   },
   "homepage": "https://github.com/mkpascal/qust#readme",
   "devDependencies": {
-    "electron": "^28.1.0",
-    "electron-builder": "^24.9.1"
-  },
-  "dependencies": {
-    "electron-store": "^8.1.0"
-  },
-  "build": {
-    "appId": "com.pascalmuangkhot.qust",
-    "productName": "Qust",
-    "directories": {
-      "output": "dist"
-    },
-    "mac": {
-      "category": "public.app-category.music",
-      "icon": "build/icons/icon.png"
-    },
-    "win": {
-      "icon": "build/icons/icon.png",
-      "target": [
-        "nsis",
-        "zip"
-      ]
-    },
-    "files": [
-      "**/*",
-      "!**/*.ts",
-      "!*.code-workspace",
-      "!LICENSE.md",
-      "!package-lock.json",
-      "!src/",
-      "!tsconfig.json",
-      "!yarn.lock"
-    ]
+    "@tauri-apps/cli": "^2"
   }
 }

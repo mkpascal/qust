@@ -68,6 +68,87 @@ body {
     cursor: pointer;
   }
 
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.volume-icon {
+  width: 1.25rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.volume-slider {
+  --volume: 0.5;
+  position: relative;
+  width: 140px;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.volume-rail {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 0.15s ease;
+}
+
+.volume-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--volume) * 100%);
+  border-radius: 3px;
+  background: linear-gradient(90deg, #44bd32, #4cd137);
+  box-shadow: 0 0 6px rgba(76, 209, 55, 0.45);
+}
+
+.volume-thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--volume) * 100%);
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.12s ease;
+}
+
+.volume-slider:hover .volume-rail,
+.volume-slider.is-dragging .volume-rail {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.volume-slider:hover .volume-thumb,
+.volume-slider.is-dragging .volume-thumb {
+  transform: scale(1.2);
+}
+
+.volume-slider:focus-visible .volume-thumb {
+  box-shadow: 0 0 0 3px rgba(76, 209, 55, 0.6);
+}
+
+.volume-display {
+  min-width: 2.75em;
+  text-align: left;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
 #customPrompt {
   position: fixed;
   left: 50%;

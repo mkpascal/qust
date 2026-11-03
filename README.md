@@ -27,3 +27,15 @@
   - Capable of handling title metadata for compatible streams,
   - Compatible with all HTTP streaming servers,
   - Supports Windows and MacOS.
+
+## Building
+
+Qust is a [Tauri](https://tauri.app) app. You need [Node.js](https://nodejs.org) and [Rust](https://rustup.rs), plus the Visual Studio C++ build tools on Windows or the Xcode command line tools on macOS.
+
+```sh
+npm install
+npm start        # run in development
+npm run build    # installers in src-tauri/target/release/bundle/
+```
+
+Every push to `main` is built on GitHub Actions for Windows and macOS. Pushing a `v*` tag creates a draft release with the installers.

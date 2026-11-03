@@ -53,17 +53,24 @@
           </div>
           <div class="row mt-2">
             <div class="card text-bg-dark card-s-3">
-              <div class="card-body">
+              <div class="card-body d-flex align-items-center justify-content-center">
                 <a class="btn btn-success" onclick="start()"
                   ><i class="bi bi-play-fill"></i
                 ></a>
-                <a class="btn btn-danger me-1" onclick="stop()"
+                <a class="btn btn-danger ms-1" onclick="stop()"
                   ><i class="bi bi-stop-fill"></i
                 ></a>
-                <a class="btn btn-outline-secondary ms-5" id="volumeDown"><i class="bi bi-volume-down-fill"></i></a>
-                <a class="btn text-white" type="button" disabled id="volumeDisplay"><small>50%</small></a>
-                <a class="btn btn-outline-secondary" id="volumeUp"><i class="bi bi-volume-up-fill"></i></a>
-                <a class="btn btn-info ms-5 nowplaying" type="button" style="visibility:hidden;" disabled>
+                <div class="volume ms-4">
+                  <i class="bi bi-volume-down-fill volume-icon" id="volumeIcon"></i>
+                  <div class="volume-slider" id="volumeSlider" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                    <div class="volume-rail">
+                      <div class="volume-fill"></div>
+                      <div class="volume-thumb"></div>
+                    </div>
+                  </div>
+                  <span class="volume-display" id="volumeDisplay">50%</span>
+                </div>
+                <a class="btn btn-info ms-4 nowplaying" type="button" style="visibility:hidden;" disabled>
                   <span
                     class="spinner-border spinner-border-sm"
                     role="status"
@@ -138,32 +145,37 @@
     </div>
 
     <audio src="https://stream.c9.fr/c9radio-192.mp3" id="audio" crossorigin="anonymous"></audio>
-    <script src="./renderer.js"></script>
     <script src="js/bootstrap.bundle.min.js"></script>
 
+    <script src="js/visualizer.js"></script>
     <script src="js/script.js"></script>
 
     <script>
-      const { ipcRenderer } = require("electron");
+      const { invoke } = window.__TAURI__.core;
+      const { listen } = window.__TAURI__.event;
 
       function saveData(key, value) {
-        ipcRenderer.invoke("set-data", key, value);
+        invoke("set_data", { key, value });
       }
 
       function deleteData(key) {
-        ipcRenderer.invoke("delete-data", key);
+        invoke("delete_data", { key });
       }
 
       async function loadData(key) {
-        return await ipcRenderer.invoke("get-data", key);
+        const value = await invoke("get_data", { key });
+        return value === null ? undefined : value;
       }
-      
 
-      ipcRenderer.on('play-action', () => {
+      function proxied(url) {
+        return window.__QUST_PROXY__ + "?url=" + encodeURIComponent(url);
+      }
+
+      listen("play-action", () => {
           start();
       });
 
-      ipcRenderer.on('stop-action', () => {
+      listen("stop-action", () => {
           stop();
       });
 

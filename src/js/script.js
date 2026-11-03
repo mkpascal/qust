@@ -1,8 +1,5 @@
-window.AudioContext = window.AudioContext || window.webkitAudioContext || window.mozAudioContext;
-
 let audio    = document.getElementById('audio')
-let ctx      = ""
-let audioSrc = ""
+let spectrum = new Spectrum(document.getElementById('canvas'), audio)
 
 var globalPlayerClicked = "";
 var intervalId;
@@ -10,59 +7,12 @@ var titleP;
 var urlP;
 
 function start(){
-    if (!ctx){
-        ctx = new AudioContext();
-        analyser = ctx.createAnalyser();
-        audioSrc = ctx.createMediaElementSource(audio)
-        audioSrc.connect(analyser)
-        analyser.connect(ctx.destination)
-    }
-
-    var frequencyData = new Uint8Array(analyser.frequencyBinCount);
-
-    var canvas = document.getElementById('canvas'),
-        cwidth = canvas.width,
-        cheight = canvas.height + 100,
-        meterWidth = 10,
-        gap = 2,
-        capHeight = 2,
-        capStyle = '#fff',
-        meterNum = 800 / (10 + 2),
-        capYPositionArray = [];
-    ctx = canvas.getContext('2d'),
-    gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(1, '#44bd32');
-    gradient.addColorStop(0.5, '#4cd137');
-    gradient.addColorStop(0.25, '#F79F1F');
-    gradient.addColorStop(0, '#e84118');
-
-    function renderFrame() {
-        var array = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(array);
-        var step = Math.round(array.length / meterNum);
-        ctx.clearRect(0, 0, cwidth, cheight);
-        for (var i = 0; i < meterNum; i++) {
-            var value = array[i * step];
-            if (capYPositionArray.length < Math.round(meterNum)) {
-                capYPositionArray.push(value);
-            };
-            ctx.fillStyle = capStyle;
-            if (value < capYPositionArray[i]) {
-                ctx.fillRect(i * 12, cheight - (--capYPositionArray[i]), meterWidth, capHeight);
-            } else {
-                ctx.fillRect(i * 12, cheight - value, meterWidth, capHeight);
-                capYPositionArray[i] = value;
-            };
-            ctx.fillStyle = gradient;
-            ctx.fillRect(i * 12, cheight - value + capHeight, meterWidth, cheight);
-        }
-        requestAnimationFrame(renderFrame);
-    }
-    renderFrame();
+    spectrum.start();
     changeVisibilityOfNowPlaying('visible');
 
     changeCardStatusText("<b>Now playing:</b> " + titleP + " (" + urlP + ")");
 
+    clearInterval(intervalId);
     intervalId = setInterval(function() {
         getMetaDataFromStream(urlP)
             .then(title => changeCardStatusText("<b>Now playing:</b> " + title + " (" + titleP + ")"))
@@ -76,6 +26,7 @@ function start(){
 function stop(){
     changeVisibilityOfNowPlaying('hidden');
     clearInterval(intervalId);
+    spectrum.stop();
     changeCardStatusText("<b>Stopped.</b>");
     audio.pause();
     audio.currentTime = 0;
@@ -130,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         playerDiv.classList.add('text-bg-success');
 
                         var audioPlayer = document.getElementById('audio');
-                        audioPlayer.src = urlP;
+                        audioPlayer.src = proxied(urlP);
 
                         saveData('last-selected-player', CBplayer);
                         saveData('last-selected-title', titleP);
@@ -291,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (key.includes("-url")){
                     var audioPlayer = document.getElementById('audio');
-                    audioPlayer.src = data;
+                    audioPlayer.src = proxied(data);
                     audioPlayer.load();
 
                     urlP = data;
@@ -311,28 +262,71 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 document.addEventListener("DOMContentLoaded", function() {
-    var audioElement = document.getElementById("audio");
+    var volumeSlider = document.getElementById("volumeSlider");
+    var volumeRail = volumeSlider.querySelector(".volume-rail");
+    var volumeIcon = document.getElementById("volumeIcon");
     var volumeDisplay = document.getElementById("volumeDisplay");
-    var volumeUp = document.getElementById("volumeUp");
-    var volumeDown = document.getElementById("volumeDown");
 
     var volume = 0.5;
-    audioElement.volume = volume;
 
-    function updateVolume(change) {
-        volume += change;
-        volume = Math.max(0, Math.min(1, volume));
-        audioElement.volume = volume;
-        volumeDisplay.innerHTML = `<small>${Math.round(volume * 100)}%</small>`;
+    function setVolume(value) {
+        volume = Math.round(Math.max(0, Math.min(1, value)) * 100) / 100;
+        spectrum.setVolume(volume);
+        volumeSlider.style.setProperty("--volume", volume);
+        volumeSlider.setAttribute("aria-valuenow", Math.round(volume * 100));
+        volumeDisplay.textContent = `${Math.round(volume * 100)}%`;
+        volumeIcon.className = "bi volume-icon " + (volume === 0 ? "bi-volume-mute-fill" : volume < 0.5 ? "bi-volume-down-fill" : "bi-volume-up-fill");
     }
 
-    volumeUp.addEventListener("click", function() {
-        updateVolume(0.1);
+    function volumeFromPointer(event) {
+        var rect = volumeRail.getBoundingClientRect();
+        setVolume((event.clientX - rect.left) / rect.width);
+    }
+
+    var dragging = false;
+
+    function endDrag() {
+        dragging = false;
+        volumeSlider.classList.remove("is-dragging");
+    }
+
+    volumeSlider.addEventListener("pointerdown", function(event) {
+        dragging = true;
+        volumeSlider.setPointerCapture(event.pointerId);
+        volumeSlider.classList.add("is-dragging");
+        volumeFromPointer(event);
     });
 
-    volumeDown.addEventListener("click", function() {
-        updateVolume(-0.1);
+    volumeSlider.addEventListener("pointermove", function(event) {
+        if (dragging) {
+            volumeFromPointer(event);
+        }
     });
+
+    volumeSlider.addEventListener("pointerup", endDrag);
+    volumeSlider.addEventListener("pointercancel", endDrag);
+    volumeSlider.addEventListener("lostpointercapture", endDrag);
+
+    volumeSlider.addEventListener("wheel", function(event) {
+        event.preventDefault();
+        setVolume(volume + (event.deltaY < 0 ? 0.05 : -0.05));
+    }, { passive: false });
+
+    volumeSlider.addEventListener("keydown", function(event) {
+        var steps = { ArrowRight: 0.05, ArrowUp: 0.05, ArrowLeft: -0.05, ArrowDown: -0.05, PageUp: 0.1, PageDown: -0.1 };
+        if (event.key in steps) {
+            setVolume(volume + steps[event.key]);
+        } else if (event.key === "Home") {
+            setVolume(0);
+        } else if (event.key === "End") {
+            setVolume(1);
+        } else {
+            return;
+        }
+        event.preventDefault();
+    });
+
+    setVolume(volume);
 });
 
 function changeCardStatusText(newText) {
@@ -356,7 +350,7 @@ async function getMetaDataFromStream(streamUrl) {
         let statusUrl = new URL(streamUrl);
         statusUrl.pathname = '/status-json.xsl';
 
-        const response = await fetch(statusUrl.href);
+        const response = await fetch(proxied(statusUrl.href));
         const data = await response.json();
 
         if (streamUrl.endsWith('/')) {
