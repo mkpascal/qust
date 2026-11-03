@@ -192,6 +192,18 @@ svg {
   color: var(--text-disabled);
 }
 
+/* A toggle button (the instant switch): filled with the accent color while on. */
+.button[aria-pressed="true"] {
+  border-color: rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(0, 0, 0, 0.14);
+  background-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.button[aria-pressed="true"]:hover {
+  background-color: color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
 .button.icon {
   width: 44px;
   padding: 0;
@@ -458,8 +470,9 @@ svg {
   padding: 9px 10px;
 }
 
-#infoButton {
-  margin-left: auto;
+/* The six transport buttons share the card's width equally. */
+.transport .button {
+  flex: 1;
 }
 
 #settingsButton {
@@ -608,6 +621,30 @@ svg {
 
 .cartridge.is-active :focus-visible {
   outline-color: var(--on-accent);
+}
+
+.cartridge-bolt {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  width: 11px;
+  height: 11px;
+  color: var(--accent);
+}
+
+.cartridge.is-preloaded .cartridge-bolt,
+.cartridge.is-preloading .cartridge-bolt {
+  display: block;
+}
+
+.cartridge.is-preloading .cartridge-bolt {
+  animation: preloading 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes preloading {
+  from { opacity: 0.15; }
+  to { opacity: 0.6; }
 }
 
 .equalizer {
@@ -988,6 +1025,18 @@ body.settings-window::-webkit-scrollbar-thumb {
   transform: translateX(18px);
 }
 
+/* A setting that can't be changed in this build (e.g. the background helper outside the
+   installed version). */
+.setting.is-disabled .setting-title,
+.setting.is-disabled .setting-icon,
+.setting.is-disabled .toggle {
+  opacity: 0.45;
+}
+
+.toggle input:disabled + .toggle-track {
+  pointer-events: none;
+}
+
 .toggle input:focus-visible + .toggle-track {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
@@ -1095,6 +1144,7 @@ body.settings-window::-webkit-scrollbar-thumb {
 @media (prefers-reduced-motion: reduce) {
   .title-row.is-scrolling span,
   .equalizer i,
+  .cartridge.is-preloading .cartridge-bolt,
   .cartridge.is-dropped,
   .dialog {
     animation: none;

@@ -51,14 +51,20 @@ Format, sample rate and channels come from the headers (`icy-br`, `ice-audio-inf
 - `player1-title` / `player1-url` through `player6-*`: the cartridges
 - `last-selected-player` / `-title` / `-url`: the last cartridge played
 - `volume`, `balance`
-- `theme`, `visualizer-colors` (`classic` / `white` / `accent`), `autoplay`, `background`
+- `theme`, `visualizer-colors` (`classic` / `white` / `accent`), `autoplay`, `background`, `instant-switch`
 - `shortcut-play`, `shortcut-stop`, `shortcut-toggle` (empty string = no shortcut)
 
 The first run imports the Electron version's `<config dir>/qust/config.json`. `loadData` turns Rust's `null` into `undefined`.
 
-**Player state.** `script.js` has `state`: `stopped` / `connecting` / `playing` / `buffering` / `paused`. `setState()` re-renders the buttons, cartridges, title, clock and loader, and broadcasts `player-status`. Stop removes the `src`, which closes the connection. A pause longer than `LIVE_RESUME_SECONDS` reloads the stream on resume, rejoining the live point. While playing, the page polls `/info` every 2 s. The title comes from ICY, then the Icecast `status-json.xsl` fallback, then the stream or cartridge name. Cartridges are rendered from the `cartridges` array (`is-empty` / `is-active` / `is-playing` classes).
+**Player state.** `script.js` has `state`: `stopped` / `connecting` / `playing` / `buffering` / `paused`. `setState()` re-renders the buttons, cartridges, title, clock and loader, and broadcasts `player-status`. Stop disconnects every stream. A pause longer than `LIVE_RESUME_SECONDS` reloads the stream on resume, rejoining the live point. While playing, the page polls `/info` every 2 s. The title comes from ICY, then the Icecast `status-json.xsl` fallback, then the stream or cartridge name. Cartridges are rendered from the `cartridges` array (`is-empty` / `is-active` / `is-playing` classes).
 
-**Visualizer.** `Spectrum` routes the element once its 44.1 kHz `AudioContext` runs: source → gain (volume) → stereo panner (balance) → speakers, and source → splitter → two analysers. So the bars ignore the volume. The analysis is an MDCT that builds 19 bars with falling peaks, at a fixed 60 updates/s. The canvas is a 75×16 pixel grid (3 px bars, 1 px gaps, 16 rows with one color per row). It's shown at 1:1, scaled only by whole numbers on high-DPI screens with `image-rendering: pixelated`. `setLoading(true)` (connecting / buffering) shows a row-of-blocks pulse that crossfades with the bars over 0.5 s.
+**Streams and instant switch.** There's no fixed `<audio>`: `streams` maps each stream URL to its own `Audio` element (`streamFor` / `unload`, with `current()` the active one). Keying by URL means reordering cartridges doesn't disturb them.
+- **Instant switch** (the ⚡ button, `instant-switch` in the store): while playing, every loaded cartridge streams in the background at level 0.
+- **`syncStreams()`:** keeps exactly the wanted streams connected (the active one while playing, plus every cartridge in instant mode) and sets the levels (active 1, others 0). Call it after anything that changes cartridges, the active slot or the state.
+- **`play()`:** when the target is already live (`isLive`), it switches immediately with no reconnect. `clockStart` resets the clock for the new station.
+- **`pause()`:** pauses only the active stream. Resuming within `LIVE_RESUME_SECONDS` applies only to the same URL (`pausedUrl`).
+
+**Visualizer.** Once its 44.1 kHz `AudioContext` runs, `Spectrum` has a shared input: input → gain (volume) → stereo panner (balance) → speakers, and input → splitter → two analysers. So the bars ignore the volume. Each stream joins with `attach(element)`, which routes element → its own gain → input. `setLevel(element, 0 | 1)` fades a stream in or out over ~15 ms, and `detach` removes it. Before the context runs, or if Web Audio fails, levels fall back to `element.volume`. The analysis is an MDCT that builds 19 bars with falling peaks, at a fixed 60 updates/s. The canvas is a 75×16 pixel grid (3 px bars, 1 px gaps, 16 rows with one color per row). It's shown at 1:1, scaled only by whole numbers on high-DPI screens with `image-rendering: pixelated`. `setLoading(true)` (connecting / buffering) shows a row-of-blocks pulse that crossfades with the bars over 0.5 s.
 
 **Events between windows.**
 - `settings-changed` `{ key, value }`: Settings → player. Includes `key: "shortcuts"` from Rust.

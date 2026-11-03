@@ -137,11 +137,16 @@ const backgroundToggle = document.getElementById('backgroundToggle');
 const backgroundLabel = document.getElementById('backgroundLabel');
 const backgroundStatus = document.getElementById('backgroundStatus');
 
+// Unavailable outside the installed version: shown off and disabled, since a test or portable
+// build shares the installed copy's settings.
 function renderBackground(background, error) {
-    backgroundToggle.checked = background.enabled;
-    backgroundLabel.textContent = background.enabled ? 'On' : 'Off';
+    const available = background.available !== false;
+    backgroundToggle.disabled = !available;
+    backgroundToggle.checked = available && background.enabled;
+    backgroundLabel.textContent = backgroundToggle.checked ? 'On' : 'Off';
+    backgroundToggle.closest('.setting').classList.toggle('is-disabled', !available);
     if (!backgroundStatus.dataset.hint) backgroundStatus.dataset.hint = backgroundStatus.textContent;
-    backgroundStatus.textContent = error || backgroundStatus.dataset.hint;
+    backgroundStatus.textContent = error || (available ? backgroundStatus.dataset.hint : 'Works in the installed version of Qust.');
     backgroundStatus.classList.toggle('is-error', !!error);
 }
 

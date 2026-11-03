@@ -19,8 +19,14 @@ const TRAY_ID: &str = "qust";
 #[derive(Default)]
 pub struct PlayRequest(AtomicBool);
 
+// Only the installed version can be the helper. Test and portable builds share the installed
+// copy's settings, so they ignore the setting rather than act on (or rewrite) its startup entry.
+pub fn available() -> bool {
+    crate::updater::installed()
+}
+
 pub fn enabled(app: &AppHandle) -> bool {
-    app.state::<Store>().get("background") == Some(Value::Bool(true))
+    available() && app.state::<Store>().get("background") == Some(Value::Bool(true))
 }
 
 pub fn launched_with(arg: &str) -> bool {
@@ -94,8 +100,9 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 
 fn describe(app: &AppHandle) -> Value {
     json!({
+        "available": available(),
         "enabled": enabled(app),
-        "startsWithWindows": app.autolaunch().is_enabled().unwrap_or(false),
+        "startsWithWindows": available() && app.autolaunch().is_enabled().unwrap_or(false),
     })
 }
 
@@ -106,6 +113,9 @@ pub fn get_background(app: AppHandle) -> Value {
 
 #[tauri::command]
 pub fn set_background(app: AppHandle, enabled: bool) -> Result<Value, String> {
+    if !available() {
+        return Err("The background helper works in the installed version of Qust".into());
+    }
     let autolaunch = app.autolaunch();
     let result = if enabled { autolaunch.enable() } else { autolaunch.disable() };
     result.map_err(|error| format!("Couldn't change the Windows startup entry: {error}"))?;

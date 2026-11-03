@@ -27,14 +27,17 @@
     }
 
     class Spectrum {
-        constructor(canvas, element) {
+        constructor(canvas) {
             this.canvas = canvas
-            this.element = element
             this.context = null
             this.analysers = null
+            this.input = null
             this.gain = null
             this.wired = false
             this.failed = false
+            this.volume = 1
+            this.balance = 0
+            this.streams = new Map()
             this.colors = palette("classic")
             this.state = this.newState()
             this.canvas.width = GRID_WIDTH
@@ -77,7 +80,7 @@
                 const running = this.context.state === "running" ? Promise.resolve() : this.context.resume()
                 running.then(() => {
                     if (this.wired || this.context.state !== "running") return
-                    const source = this.context.createMediaElementSource(this.element)
+                    this.input = this.context.createGain()
                     const splitter = this.context.createChannelSplitter(2)
                     this.analysers = [0, 1].map(() => {
                         const analyser = this.context.createAnalyser()
@@ -85,30 +88,68 @@
                         return analyser
                     })
                     this.gain = this.context.createGain()
-                    this.gain.gain.value = this.element.volume
-                    this.element.volume = 1
+                    this.gain.gain.value = this.volume
                     this.panner = this.context.createStereoPanner()
-                    this.panner.pan.value = this.balance || 0
-                    source.connect(this.gain)
+                    this.panner.pan.value = this.balance
+                    this.input.connect(this.gain)
                     this.gain.connect(this.panner)
                     this.panner.connect(this.context.destination)
-                    source.connect(splitter)
+                    this.input.connect(splitter)
                     splitter.connect(this.analysers[0], 0)
                     splitter.connect(this.analysers[1], 1)
                     this.wired = true
+                    this.streams.forEach((stream, element) => this.route(element, stream))
                 }).catch(() => { this.failed = true })
             } catch (e) {
                 this.failed = true
             }
         }
 
-        setVolume(volume) {
-            if (this.wired && this.gain) {
-                this.gain.gain.value = volume
-                this.element.volume = 1
-            } else {
-                this.element.volume = volume
+        attach(element) {
+            if (!this.streams.has(element)) this.streams.set(element, { level: 0 })
+            const stream = this.streams.get(element)
+            if (this.wired) this.route(element, stream)
+            else element.volume = this.volume * stream.level
+        }
+
+        route(element, stream) {
+            if (stream.node) return
+            try {
+                stream.source = this.context.createMediaElementSource(element)
+                stream.node = this.context.createGain()
+                stream.node.gain.value = stream.level
+                stream.source.connect(stream.node)
+                stream.node.connect(this.input)
+                element.volume = 1
+            } catch (e) {
+                element.volume = this.volume * stream.level
             }
+        }
+
+        detach(element) {
+            const stream = this.streams.get(element)
+            if (!stream) return
+            if (stream.node) {
+                stream.source.disconnect()
+                stream.node.disconnect()
+            }
+            this.streams.delete(element)
+        }
+
+        setLevel(element, level) {
+            const stream = this.streams.get(element)
+            if (!stream || stream.level === level) return
+            stream.level = level
+            if (stream.node) stream.node.gain.setTargetAtTime(level, this.context.currentTime, 0.015)
+            else element.volume = this.volume * level
+        }
+
+        setVolume(volume) {
+            this.volume = volume
+            if (this.gain) this.gain.gain.value = volume
+            this.streams.forEach((stream, element) => {
+                if (!stream.node) element.volume = volume * stream.level
+            })
         }
 
         setBalance(balance) {

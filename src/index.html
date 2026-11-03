@@ -19,6 +19,7 @@
       <symbol id="i-vol-2" viewBox="0 0 16 16"><use href="#i-speaker" /><path d="M10.6 5.8a3 3 0 0 1 0 4.4M12.4 4a5.6 5.6 0 0 1 0 8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></symbol>
       <symbol id="i-settings" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.9" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2.317 2.317" /><circle cx="8" cy="8" r="3.9" fill="none" stroke="currentColor" stroke-width="2.2" /></symbol>
       <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M8 7.2v4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="8" cy="4.9" r=".95" /></symbol>
+      <symbol id="i-bolt" viewBox="0 0 16 16"><path d="M9.2 1.6 3.6 9h3.6l-1 5.4L12.4 7H8.8z" /></symbol>
       <symbol id="i-balance" viewBox="0 0 16 16"><path d="M2 8h12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /><path d="M2.5 5v6M13.5 5v6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /><circle cx="8" cy="8" r="2.2" /></symbol>
     </svg>
 
@@ -67,6 +68,7 @@
           <button class="button accent icon" id="playButton" title="Play" aria-label="Play"><svg><use href="#i-play" /></svg></button>
           <button class="button icon" id="pauseButton" title="Pause" aria-label="Pause"><svg><use href="#i-pause" /></svg></button>
           <button class="button icon" id="stopButton" title="Stop" aria-label="Stop"><svg><use href="#i-stop" /></svg></button>
+          <button class="button icon" id="instantButton" aria-pressed="false" aria-label="Instant switch"><svg><use href="#i-bolt" /></svg></button>
           <button class="button icon" id="infoButton" title="Stream information" aria-label="Stream information"><svg><use href="#i-info" /></svg></button>
           <button class="button icon" id="settingsButton" title="Settings" aria-label="Settings"><svg><use href="#i-settings" /></svg></button>
         </div>
@@ -95,7 +97,6 @@
       </form>
     </div>
 
-    <audio id="audio" crossorigin="anonymous" preload="none"></audio>
 
     <script src="js/bridge.js"></script>
     <script src="js/visualizer.js"></script>

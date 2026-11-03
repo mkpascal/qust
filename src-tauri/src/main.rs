@@ -15,17 +15,20 @@ struct PageConfig {
 }
 
 fn main() {
-    tauri::Builder::default()
-        // First, so a second launch (Start menu while the helper runs) just shows this instance.
-        // `qust.exe --toggle` acts like the Play / Stop / Start shortcut (e.g. from a Stream Deck
-        // "Open" action).
-        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
-            if args.iter().any(|arg| arg == background::TOGGLE_ARG) {
-                background::player_action(app, "toggle");
-            } else if !args.iter().any(|arg| arg == background::LAUNCH_ARG) {
-                background::show_player(app, false);
-            }
-        }))
+    let builder = tauri::Builder::default();
+    // First, so a second launch (Start menu while the helper runs) just shows this instance.
+    // `qust.exe --toggle` acts like the Play / Stop / Start shortcut (e.g. from a Stream Deck
+    // "Open" action). Not in debug builds: they share the installed app's identifier, so they would
+    // just hand over to an installed Qust running in the tray instead of starting.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _| {
+        if args.iter().any(|arg| arg == background::TOGGLE_ARG) {
+            background::player_action(app, "toggle");
+        } else if !args.iter().any(|arg| arg == background::LAUNCH_ARG) {
+            background::show_player(app, false);
+        }
+    }));
+    builder
         .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(shortcuts::handle).build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(

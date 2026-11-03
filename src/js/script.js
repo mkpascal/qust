@@ -3,8 +3,7 @@ const LIVE_RESUME_SECONDS = 10;
 const INFO_INTERVAL = 2000;
 const STATUS_INTERVAL = 15000;
 
-const audio = document.getElementById('audio');
-const spectrum = new Spectrum(document.getElementById('canvas'), audio);
+const spectrum = new Spectrum(document.getElementById('canvas'));
 
 const ui = {
     clock: document.getElementById('clock'),
@@ -31,6 +30,7 @@ const ui = {
     cancelButton: document.getElementById('cancelButton'),
     settingsButton: document.getElementById('settingsButton'),
     infoButton: document.getElementById('infoButton'),
+    instantButton: document.getElementById('instantButton'),
 };
 
 // cartridges[i] = { title, url } or null, for slots player1..player6
@@ -47,6 +47,86 @@ let statusTitle = null;
 let stalls = 0;
 let dialogSlot = null;
 let settings = { colors: 'classic', autoplay: false };
+// Instant switch (the lightning button): every loaded cartridge streams, muted but the active one.
+let instant = false;
+// One <audio> per stream URL (several in instant mode), all routed through the visualizer's graph.
+const streams = new Map();
+// The URL that was paused, and the active stream's time when it became active (for the clock).
+let pausedUrl = null;
+let clockStart = 0;
+
+/* Streams */
+
+function current() {
+    const cartridge = cartridges[activeSlot];
+    return cartridge ? streams.get(cartridge.url) || null : null;
+}
+
+function streamFor(url) {
+    if (streams.has(url)) return streams.get(url);
+    const element = new Audio();
+    element.crossOrigin = 'anonymous';
+    element.preload = 'none';
+    element.addEventListener('playing', () => {
+        if (element === current() && state !== 'stopped' && state !== 'paused') setState('playing');
+        else renderCartridges();
+    });
+    element.addEventListener('waiting', () => {
+        if (element !== current() || state !== 'playing') return renderCartridges();
+        stalls++;
+        setState('buffering');
+    });
+    element.addEventListener('error', () => {
+        if (element !== current() || state === 'stopped') return renderCartridges();
+        stop();
+        setTitle("Couldn't play this stream", true);
+    });
+    spectrum.attach(element);
+    streams.set(url, element);
+    return element;
+}
+
+function unload(url) {
+    const element = streams.get(url);
+    element.pause();
+    element.removeAttribute('src');
+    element.load();
+    spectrum.detach(element);
+    streams.delete(url);
+}
+
+// Already playing and ahead of the buffer: switching to it is instant.
+function isLive(element) {
+    return !!element.getAttribute('src') && !element.paused && !element.error && element.readyState >= 3;
+}
+
+// Keeps the right streams connected: the active one while playing, plus every other loaded
+// cartridge in instant mode (muted). Everything else is disconnected.
+function syncStreams() {
+    const active = cartridges[activeSlot] ? cartridges[activeSlot].url : null;
+    const wanted = new Set(instant && state !== 'stopped' ? cartridges.filter(Boolean).map((cartridge) => cartridge.url) : []);
+    if (active && state !== 'stopped') wanted.add(active);
+    for (const url of [...streams.keys()]) {
+        if (!wanted.has(url)) unload(url);
+    }
+    for (const url of wanted) {
+        if (url === active) continue;
+        const element = streamFor(url);
+        if (!element.getAttribute('src') || element.error) element.src = proxied(url);
+        if (element.paused) element.play().catch(() => {});
+    }
+    streams.forEach((element, url) => spectrum.setLevel(element, url === active ? 1 : 0));
+    renderCartridges();
+}
+
+function setInstant(on) {
+    instant = on;
+    ui.instantButton.setAttribute('aria-pressed', String(on));
+    ui.instantButton.title = on
+        ? 'Instant switch is on: every cartridge streams in the background, so switching is immediate (uses more data)'
+        : 'Instant switch: keep every cartridge streaming in the background for immediate switching (uses more data)';
+    syncStreams();
+}
 
 /* Playback */
 
@@ -54,31 +134,35 @@ function play() {
     const cartridge = cartridges[activeSlot];
     if (!cartridge) return;
     spectrum.start();
-    const resume = state === 'paused' && (Date.now() - pausedAt) / 1000 < LIVE_RESUME_SECONDS;
+    const element = streamFor(cartridge.url);
+    const resume = state === 'paused' && pausedUrl === cartridge.url && (Date.now() - pausedAt) / 1000 < LIVE_RESUME_SECONDS;
+    const live = !resume && isLive(element);
     if (!resume) {
         stalls = 0;
         streamInfo = {};
         statusTitle = null;
         lastStatusFetch = 0;
-        audio.src = proxied(cartridge.url);
+        clockStart = live ? element.currentTime : 0;
+        if (!live) element.src = proxied(cartridge.url);
     }
-    setState(resume ? 'buffering' : 'connecting');
-    audio.play().catch(() => {});
+    setState(live ? 'playing' : resume ? 'buffering' : 'connecting');
+    element.play().catch(() => {});
     startInfo();
+    syncStreams();
 }
 
 function pause() {
     if (state === 'stopped' || state === 'paused') return;
-    audio.pause();
+    const element = current();
+    if (element) element.pause();
+    pausedUrl = cartridges[activeSlot] ? cartridges[activeSlot].url : null;
     pausedAt = Date.now();
     setState('paused');
 }
 
 function stop() {
     setState('stopped');
-    audio.pause();
-    audio.removeAttribute('src');
-    audio.load();
+    syncStreams();
     spectrum.stop();
     stopInfo();
     streamInfo = {};
@@ -100,22 +184,6 @@ function setState(next) {
     renderClock();
     emitStatus();
 }
-
-audio.addEventListener('playing', () => {
-    if (state !== 'stopped' && state !== 'paused') setState('playing');
-});
-
-audio.addEventListener('waiting', () => {
-    if (state !== 'playing') return;
-    stalls++;
-    setState('buffering');
-});
-
-audio.addEventListener('error', () => {
-    if (state === 'stopped') return;
-    stop();
-    setTitle("Couldn't play this stream", true);
-});
 
 /* Stream details: ICY title and format from the proxy, Icecast status page as a title fallback */
 
@@ -208,7 +276,8 @@ function setTitle(text, dim) {
 }
 
 function renderClock() {
-    const seconds = state === 'stopped' ? 0 : Math.floor(audio.currentTime || 0);
+    const element = current();
+    const seconds = state === 'stopped' || !element ? 0 : Math.max(0, Math.floor((element.currentTime || 0) - clockStart));
     const h = Math.floor(seconds / 3600);
     const m = Math.floor(seconds / 60) % 60;
     const s = String(seconds % 60).padStart(2, '0');
@@ -228,6 +297,7 @@ function renderCartridges() {
             element.innerHTML = `
                 <button class="cartridge-body">
                   <span class="equalizer" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <svg class="cartridge-bolt" aria-hidden="true"><use href="#i-bolt" /></svg>
                   <svg class="cartridge-plus"><use href="#i-plus" /></svg>
                   <span class="cartridge-name"></span>
                   <span class="cartridge-host"></span>
@@ -248,6 +318,10 @@ function renderCartridges() {
         element.classList.toggle('is-empty', empty);
         element.classList.toggle('is-active', !empty && slot === activeSlot);
         element.classList.toggle('is-playing', !empty && slot === activeSlot && state !== 'stopped' && state !== 'paused');
+        // Instant switch: a bolt on the other cartridges, faint while connecting, solid once live.
+        const stream = !empty && instant && slot !== activeSlot && state !== 'stopped' ? streams.get(cartridge.url) : null;
+        element.classList.toggle('is-preloaded', !!stream && isLive(stream));
+        element.classList.toggle('is-preloading', !!stream && !isLive(stream));
         element.querySelector('.cartridge-plus').style.display = empty ? '' : 'none';
         element.querySelector('.cartridge-name').textContent = empty ? 'Load' : cartridge.title;
         element.querySelector('.cartridge-host').textContent = empty ? '' : host(cartridge.url);
@@ -267,7 +341,7 @@ function host(url) {
 
 function selectSlot(slot) {
     const cartridge = cartridges[slot];
-    if (state !== 'stopped') stop();
+    if (!instant && state !== 'stopped') stop();
     activeSlot = slot;
     saveData('last-selected-player', 'player' + (slot + 1));
     saveData('last-selected-title', cartridge.title);
@@ -423,6 +497,7 @@ ui.dialogForm.addEventListener('submit', (event) => {
         }
     }
     setState(state);
+    syncStreams();
 });
 
 function eject(slot) {
@@ -437,6 +512,7 @@ function eject(slot) {
         deleteData('last-selected-url');
     }
     setState(state);
+    syncStreams();
 }
 
 ui.ejectButton.addEventListener('click', () => {
@@ -597,7 +673,8 @@ ui.infoButton.addEventListener('click', openInfo);
 function emitStatus() {
     const cartridge = cartridges[activeSlot];
     let buffer = 0;
-    if (audio.buffered.length) buffer = Math.max(0, audio.buffered.end(audio.buffered.length - 1) - audio.currentTime);
+    const audio = current();
+    if (audio && audio.buffered.length) buffer = Math.max(0, audio.buffered.end(audio.buffered.length - 1) - audio.currentTime);
     window.__TAURI__.event.emit('player-status', {
         state,
         station: cartridge ? cartridge.title : null,
@@ -678,6 +755,10 @@ document.addEventListener('contextmenu', async (event) => {
 /* Buttons and shortcuts */
 
 ui.playButton.addEventListener('click', play);
+ui.instantButton.addEventListener('click', () => {
+    setInstant(!instant);
+    saveData('instant-switch', instant);
+});
 ui.pauseButton.addEventListener('click', pause);
 ui.stopButton.addEventListener('click', stop);
 
@@ -710,6 +791,7 @@ listen('toggle-action', () => {
     if (['classic', 'white', 'accent'].includes(colors)) settings.colors = colors;
     settings.autoplay = autoplay === true;
     applySettings();
+    setInstant((await loadData('instant-switch')) === true);
     shortcuts = await invoke('get_shortcuts');
     applyShortcuts();
 
