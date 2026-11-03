@@ -29,19 +29,24 @@ jobs:
         run: |
           version=$(node -p "require('./package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_EVENT_NAME" = push ] && ! gh release view "v$version" > /dev/null 2>&1; then
-            echo "new=true" >> "$GITHUB_OUTPUT"
-          fi
         env:
           GH_TOKEN: ${{ github.token }}
 
       # A draft until both platforms have uploaded, so the updater never sees a half-done release.
+      # A draft left by a failed run is replaced; a published release means nothing to do.
       - id: create
-        if: steps.version.outputs.new == 'true'
+        if: github.event_name == 'push'
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" --draft --target "$GITHUB_SHA" \
-            --title "Qust v${{ steps.version.outputs.version }}" --generate-notes
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | select(.tag_name == "v${{ steps.version.outputs.version }}") | .id')
+          tag="v${{ steps.version.outputs.version }}"
+          draft=$(gh release view "$tag" --json isDraft --jq .isDraft 2> /dev/null || echo missing)
+          if [ "$draft" = false ]; then
+            exit 0
+          fi
+          if [ "$draft" = true ]; then
+            gh release delete "$tag" --yes
+          fi
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" \
+            -f name="Qust $tag" -F draft=true -F generate_release_notes=true --jq .id)
           echo "id=$id" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
