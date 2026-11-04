@@ -81,7 +81,7 @@ async function poll() {
         info = {};
     } else {
         try {
-            info = await (await fetch(proxiedInfo(status.url))).json();
+            info = await streamDetails(status.url);
         } catch (error) {
             info = {};
         }

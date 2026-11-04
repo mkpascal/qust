@@ -2,6 +2,17 @@ const SLOTS = 6;
 const LIVE_RESUME_SECONDS = 10;
 const INFO_INTERVAL = 2000;
 const STATUS_INTERVAL = 15000;
+// Reconnecting after a drop: right away, then a try every second for 15 tries, then every 15 s
+// until the time set in Settings (`reconnect-minutes`, 0 = never give up) runs out.
+const RETRY_FAST_TRIES = 15;
+const RETRY_FAST_DELAY = 1000;
+const RETRY_SLOW_DELAY = 15000;
+// A try that hasn't started playing by then failed (the proxy gives up connecting after 10 s).
+const ATTEMPT_TIMEOUT = 12000;
+// Playing, but the clock hasn't moved for this long: the stream or the audio engine is stuck.
+const STALL_TIMEOUT = 3000;
+// Playing this long again ends a reconnect sequence; a drop before that continues it.
+const RECOVERED_TIMEOUT = 10000;
 
 const spectrum = new Spectrum(document.getElementById('canvas'));
 
@@ -46,14 +57,23 @@ let statusTitle = null;
 // times playback stalled (the "waiting" event) since the stream started
 let stalls = 0;
 let dialogSlot = null;
-let settings = { colors: 'classic', autoplay: false };
+let settings = { colors: 'classic', autoplay: false, reconnectMinutes: 5 };
+// The reconnect sequence in progress: { since, tries, startedAt, timer, recoveredAt }, or null.
+let retry = null;
+// Why playback stopped on its own ("Connection lost"), shown in place of "Stopped".
+let notice = null;
+// Last seen progress of the active stream and of the audio engine, for the stall watchdog.
+let progress = null;
 // Instant switch (the lightning button): every loaded cartridge streams, muted but the active one.
 let instant = false;
 // One <audio> per stream URL (several in instant mode), all routed through the visualizer's graph.
 const streams = new Map();
-// The URL that was paused, and the active stream's time when it became active (for the clock).
+// The URL that was paused. The clock shows clockBase (time carried over a reconnect) plus the
+// active stream's time since clockStart (its time when it became active).
 let pausedUrl = null;
 let clockStart = 0;
+let clockBase = 0;
+let backgroundRetry = null;
 
 /* Streams */
 
@@ -68,19 +88,32 @@ function streamFor(url) {
     element.crossOrigin = 'anonymous';
     element.preload = 'none';
     element.addEventListener('playing', () => {
-        if (element === current() && state !== 'stopped' && state !== 'paused') setState('playing');
-        else renderCartridges();
+        if (element !== current() || state === 'stopped' || state === 'paused') return renderCartridges();
+        if (retry) {
+            clearTimeout(retry.timer);
+            retry.recoveredAt = Date.now();
+        }
+        setState('playing');
     });
+    // The buffer ran out: reconnect rather than wait for it to refill.
     element.addEventListener('waiting', () => {
         if (element !== current() || state !== 'playing') return renderCartridges();
-        stalls++;
-        setState('buffering');
+        lost();
     });
-    element.addEventListener('error', () => {
-        if (element !== current() || state === 'stopped') return renderCartridges();
-        stop();
-        setTitle("Couldn't play this stream", true);
-    });
+    // The connection closed or failed. A stream that never played isn't retried (wrong address).
+    const dropped = () => {
+        if (streams.get(url) !== element) return;
+        if (element !== current()) {
+            renderCartridges();
+            retryBackground();
+        } else if (state === 'connecting' && !retry) {
+            fail("Couldn't play this stream");
+        } else if (state !== 'stopped' && state !== 'paused') {
+            lost();
+        }
+    };
+    element.addEventListener('error', dropped);
+    element.addEventListener('ended', dropped);
     spectrum.attach(element);
     streams.set(url, element);
     return element;
@@ -112,11 +145,20 @@ function syncStreams() {
     for (const url of wanted) {
         if (url === active) continue;
         const element = streamFor(url);
-        if (!element.getAttribute('src') || element.error) element.src = proxied(url);
+        if (!element.getAttribute('src') || element.error || element.ended) element.src = proxied(url);
         if (element.paused) element.play().catch(() => {});
     }
     streams.forEach((element, url) => spectrum.setLevel(element, url === active ? 1 : 0));
     renderCartridges();
+}
+
+// A background stream (instant switch) dropped: reconnect it a little later.
+function retryBackground() {
+    if (backgroundRetry) return;
+    backgroundRetry = setTimeout(() => {
+        backgroundRetry = null;
+        syncStreams();
+    }, RETRY_SLOW_DELAY);
 }
 
 function setInstant(on) {
@@ -133,6 +175,8 @@ function setInstant(on) {
 function play() {
     const cartridge = cartridges[activeSlot];
     if (!cartridge) return;
+    endRetry();
+    notice = null;
     spectrum.start();
     const element = streamFor(cartridge.url);
     const resume = state === 'paused' && pausedUrl === cartridge.url && (Date.now() - pausedAt) / 1000 < LIVE_RESUME_SECONDS;
@@ -142,6 +186,7 @@ function play() {
         streamInfo = {};
         statusTitle = null;
         lastStatusFetch = 0;
+        clockBase = 0;
         clockStart = live ? element.currentTime : 0;
         if (!live) element.src = proxied(cartridge.url);
     }
@@ -153,6 +198,7 @@ function play() {
 
 function pause() {
     if (state === 'stopped' || state === 'paused') return;
+    endRetry();
     const element = current();
     if (element) element.pause();
     pausedUrl = cartridges[activeSlot] ? cartridges[activeSlot].url : null;
@@ -161,6 +207,8 @@ function pause() {
 }
 
 function stop() {
+    endRetry();
+    notice = null;
     setState('stopped');
     syncStreams();
     spectrum.stop();
@@ -169,6 +217,94 @@ function stop() {
     statusTitle = null;
     renderInfo();
 }
+
+// Stops and says why in place of the title.
+function fail(text) {
+    stop();
+    notice = text;
+    renderTitle();
+}
+
+/* Reconnecting */
+
+function endRetry() {
+    if (retry) clearTimeout(retry.timer);
+    retry = null;
+}
+
+// The active stream dropped or got stuck: reconnect right away the first time, then on the
+// schedule above. Each try that fails (error, closed, or not playing in time) calls this again.
+function lost() {
+    if (state === 'stopped' || state === 'paused' || !cartridges[activeSlot]) return;
+    if (state === 'playing') stalls++;
+    if (!retry) retry = { since: Date.now(), tries: 0, startedAt: 0, timer: null, recoveredAt: 0 };
+    clearTimeout(retry.timer);
+    retry.recoveredAt = 0;
+    // Counted from the start of the last try, which may itself have taken a while to fail.
+    const interval = retry.tries < RETRY_FAST_TRIES ? RETRY_FAST_DELAY : RETRY_SLOW_DELAY;
+    const delay = retry.tries === 0 ? 0 : Math.max(0, interval - (Date.now() - retry.startedAt));
+    const limit = settings.reconnectMinutes * 60000;
+    if (limit && Date.now() + delay - retry.since > limit) return fail('Connection lost');
+    retry.timer = setTimeout(reconnect, delay);
+    if (state !== 'buffering') setState('buffering');
+}
+
+function reconnect() {
+    const cartridge = cartridges[activeSlot];
+    if (!retry || !cartridge || state === 'stopped' || state === 'paused') return;
+    retry.tries++;
+    retry.startedAt = Date.now();
+    // A fresh element: the old one may hold a dead connection or a stuck decoder.
+    clockBase = elapsed();
+    clockStart = 0;
+    if (streams.has(cartridge.url)) unload(cartridge.url);
+    const element = streamFor(cartridge.url);
+    element.src = proxied(cartridge.url);
+    element.play().catch(() => {});
+    syncStreams();
+    renderTitle();
+    retry.timer = setTimeout(lost, ATTEMPT_TIMEOUT);
+}
+
+// The audio engine stopped rendering (its clock froze, e.g. after the output device changed or
+// the PC woke up): start a new one. An element can feed only one AudioContext, so every stream
+// gets a new element.
+function restartAudio() {
+    clockBase = elapsed();
+    clockStart = 0;
+    for (const url of [...streams.keys()]) unload(url);
+    spectrum.reset();
+    spectrum.start();
+}
+
+// Every second: wake a suspended audio engine, and catch a stream whose clock stopped without an
+// event (the player would otherwise sit on "playing" with no sound).
+function watch() {
+    const element = current();
+    if (state === 'stopped' || state === 'paused') {
+        progress = null;
+        return;
+    }
+    spectrum.wake();
+    if (retry && retry.recoveredAt && Date.now() - retry.recoveredAt > RECOVERED_TIMEOUT) endRetry();
+    if (state !== 'playing' || !element) {
+        progress = null;
+        return;
+    }
+    const now = Date.now();
+    const engine = spectrum.clock();
+    if (!progress || progress.element !== element || progress.time !== element.currentTime) {
+        progress = { element, time: element.currentTime, engine, at: now };
+        return;
+    }
+    if (now - progress.at < STALL_TIMEOUT) return;
+    const engineStuck = engine !== null && engine === progress.engine;
+    progress = null;
+    if (engineStuck) restartAudio();
+    lost();
+}
+
+setInterval(watch, 1000);
 
 function setState(next) {
     state = next;
@@ -201,14 +337,21 @@ function stopInfo() {
 async function pollInfo() {
     const cartridge = cartridges[activeSlot];
     if (!cartridge) return;
+    // The answer is dropped if the station changed meanwhile.
+    const stillActive = () => cartridges[activeSlot] === cartridge;
+    let info = {};
     try {
-        streamInfo = await (await fetch(proxiedInfo(cartridge.url))).json();
-    } catch (error) {
-        streamInfo = {};
-    }
+        info = await streamDetails(cartridge.url);
+    } catch (error) {}
+    if (!stillActive()) return;
+    // Keep the last title across a reconnect, until the new connection sends one.
+    if (retry && !info.title && streamInfo.title) info.title = streamInfo.title;
+    streamInfo = info;
     if (!streamInfo.title && Date.now() - lastStatusFetch > STATUS_INTERVAL) {
         lastStatusFetch = Date.now();
-        statusTitle = await getMetaDataFromStream(cartridge.url);
+        const title = await icecastTitle(cartridge.url).catch(() => null);
+        if (!stillActive()) return;
+        statusTitle = title;
     }
     renderInfo();
 }
@@ -228,23 +371,6 @@ function formatKhz(samplerate) {
     return Number.isInteger(khz) ? String(khz) : khz.toFixed(1);
 }
 
-async function getMetaDataFromStream(streamUrl) {
-    try {
-        const statusUrl = new URL(streamUrl);
-        statusUrl.pathname = '/status-json.xsl';
-        const data = await (await fetch(proxied(statusUrl.href))).json();
-        const sources = [].concat(data.icestats.source || []);
-        if (streamUrl.endsWith('/')) {
-            return (sources[0] && sources[0].title) || null;
-        }
-        const streamPath = new URL(streamUrl).pathname;
-        const source = sources.find((s) => s.listenurl && new URL(s.listenurl).pathname === streamPath);
-        return (source && source.title) || null;
-    } catch (error) {
-        return null;
-    }
-}
-
 /* Display */
 
 function renderTitle() {
@@ -253,9 +379,11 @@ function renderTitle() {
     if (!cartridge) {
         setTitle('Load a cartridge to start', true);
     } else if (state === 'stopped') {
-        setTitle('Stopped', true);
+        setTitle(notice || 'Stopped', true);
     } else if (state === 'connecting') {
         setTitle('Connecting…', true);
+    } else if (retry && state === 'buffering') {
+        setTitle('Reconnecting…', true);
     } else {
         const title = streamInfo.title || statusTitle || streamInfo.name || cartridge.title;
         setTitle(state === 'paused' ? title + ' (paused)' : title, false);
@@ -275,9 +403,13 @@ function setTitle(text, dim) {
     }
 }
 
-function renderClock() {
+function elapsed() {
     const element = current();
-    const seconds = state === 'stopped' || !element ? 0 : Math.max(0, Math.floor((element.currentTime || 0) - clockStart));
+    return clockBase + (element ? Math.max(0, (element.currentTime || 0) - clockStart) : 0);
+}
+
+function renderClock() {
+    const seconds = state === 'stopped' ? 0 : Math.floor(elapsed());
     const h = Math.floor(seconds / 3600);
     const m = Math.floor(seconds / 60) % 60;
     const s = String(seconds % 60).padStart(2, '0');
@@ -638,6 +770,8 @@ const balance = makeSlider(document.getElementById('balanceSlider'), {
 /* Settings (edited in the settings window, settings.js) */
 
 const { Menu } = window.__TAURI__.menu;
+// Clicking the analyzer cycles its colors, "off" included (also in Settings).
+const COLOR_CYCLE = ['classic', 'white', 'accent', 'off'];
 
 function applySettings() {
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-light').trim();
@@ -655,6 +789,14 @@ function openInfo() {
 }
 
 ui.settingsButton.addEventListener('click', openSettings);
+
+document.getElementById('screen').addEventListener('click', () => {
+    const value = COLOR_CYCLE[(COLOR_CYCLE.indexOf(settings.colors) + 1) % COLOR_CYCLE.length];
+    settings.colors = value;
+    applySettings();
+    saveData('visualizer-colors', value);
+    window.__TAURI__.event.emit('settings-changed', { key: 'colors', value });
+});
 
 // A dot on the cog when a downloaded update is waiting (installed from Settings).
 function showUpdate(update) {
@@ -787,9 +929,10 @@ listen('toggle-action', () => {
     if (typeof savedVolume === 'number') volume.set(savedVolume);
     if (typeof savedBalance === 'number') balance.set(savedBalance);
 
-    const [colors, autoplay] = await Promise.all([loadData('visualizer-colors'), loadData('autoplay')]);
-    if (['classic', 'white', 'accent'].includes(colors)) settings.colors = colors;
+    const [colors, autoplay, reconnectMinutes] = await Promise.all([loadData('visualizer-colors'), loadData('autoplay'), loadData('reconnect-minutes')]);
+    if (COLOR_CYCLE.includes(colors)) settings.colors = colors;
     settings.autoplay = autoplay === true;
+    if (typeof reconnectMinutes === 'number' && reconnectMinutes >= 0) settings.reconnectMinutes = reconnectMinutes;
     applySettings();
     setInstant((await loadData('instant-switch')) === true);
     shortcuts = await invoke('get_shortcuts');

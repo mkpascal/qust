@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Qust is a small Tauri 2 desktop player for HTTP audio streams (Icecast / SHOUTcast v2). The user saves up to six streams on "cartridge" cards and plays one at a time through a single `<audio>` element, with a pixel spectrum analyzer. The UI imitates Windows 11 (Fluent): Mica, system light/dark theme, the user's accent color, and native menus. Targets Windows and macOS. It was an Electron + Bootstrap app until November 2026.
+Qust is a small Tauri 2 desktop player for HTTP audio streams (Icecast / SHOUTcast v2). The user saves up to six streams on "cartridge" cards and plays one at a time through `<audio>` elements in the system webview (WebView2 / WKWebView, so the UI is web, not native), with a pixel spectrum analyzer. The UI imitates Windows 11 (Fluent): a solid background (no Mica: it tinted the window with the wallpaper while active), system light/dark theme, the user's accent color, and native menus. Targets Windows and macOS. It was an Electron + Bootstrap app until November 2026.
 
 ## Commands
 
@@ -19,13 +19,13 @@ You need Rust (stable, via rustup), plus the MSVC build tools on Windows (WebVie
   - `index.html` + `js/script.js`: the player window (label `main`).
   - `settings.html` + `js/settings.js`: the Settings window (label `settings`).
   - `info.html` + `js/info.js`: the Stream information window (label `info`).
-  - `js/bridge.js`: glue to Rust. It applies `window.__QUST__` (Mica class, accent colors) and defines `saveData` / `loadData` / `deleteData`, `proxied(url)` / `proxiedInfo(url)` and `shortcutKeys()`. It owns right-click: it always blocks the browser menu and shows native edit menus on inputs and on `dd` / `.copyable` values. It also blocks browser keys (reload, find, print).
+  - `js/bridge.js`: glue to Rust. It applies `window.__QUST__` (accent colors) and defines `saveData` / `loadData` / `deleteData`, `proxied(url)`, `streamDetails(url)` / `icecastTitle(url)` and `shortcutKeys()`. It owns right-click: it always blocks the browser menu and shows native edit menus on inputs and on `dd` / `.copyable` values. It also blocks browser keys (reload, find, print).
   - `js/visualizer.js`: the `Spectrum` class (audio graph, analysis, pixel drawing, loading animation), exposed as `window.Spectrum`. Keep this file free of comments.
   - `css/style.css`: all styles, with Fluent tokens as CSS variables (dark by default, light under `prefers-color-scheme: light`).
 - `src-tauri/src/`
-  - `main.rs`: builds windows through `build_window` (Mica on Windows 11, owner/centering for the panels, the injected `window.__QUST__`), plus the `open_panel` and `set_theme` commands.
+  - `main.rs`: builds windows through `build_window` (owner/centering for the panels, the injected `window.__QUST__`), plus the `open_panel` and `set_theme` commands.
   - `store.rs`: settings in `settings.json` in the app config dir (`%APPDATA%\com.pascalmuangkhot.qust`), through `get_data` / `set_data` / `delete_data`.
-  - `proxy.rs`: the local stream proxy (see below).
+  - `proxy.rs`: the local stream proxy and the `stream_info` / `icecast_title` commands (see below).
   - `shortcuts.rs`: the customizable global shortcuts.
   - `updater.rs`: the auto-updater.
   - `background.rs`: the background helper (tray, start with Windows, opening the player on demand).
@@ -37,32 +37,36 @@ You need Rust (stable, via rustup), plus the MSVC build tools on Windows (WebVie
 
 **Windows.** The player is 860×267 and not resizable. Settings (520×560) and Stream information (580×590) are separate native windows opened with `invoke('open_panel', { name })`. They are owned by the player, so they stay above it with no taskbar button, and they open centered over it. Esc closes them. All webviews must get identical `additional_browser_args`, because WebView2 shares one browser process. That is why every window goes through `build_window`. Creating windows from a command must be `async` (sync deadlocks on Windows). Capabilities (`capabilities/default.json`) list all three window labels.
 
-**`window.__QUST__`.** Injected by `main.rs`: `proxy` (base URL), `mica`, `accent` (`base` / `light` / `dark` from the Windows `AccentPalette` registry value; the light shade is used in dark mode and vice versa) and `debug`. `app.withGlobalTauri` is on, so pages use `window.__TAURI__.*` directly.
+**`window.__QUST__`.** Injected by `main.rs`: `proxy` (base URL), `accent` (`base` / `light` / `dark` from the Windows `AccentPalette` registry value; the light shade is used in dark mode and vice versa) and `debug`. `app.withGlobalTauri` is on, so pages use `window.__TAURI__.*` directly.
 
 **Theme.** `theme` in the store is `system` / `light` / `dark`. Windows are built with it, and the `set_theme` command applies it to every window. WebView2 then switches `prefers-color-scheme`, so CSS needs no theme class.
 
 **Stream proxy.** The webview enforces CORS, and the visualizer needs CORS on the audio. `proxy.rs` listens on `127.0.0.1:<random port>/<random token>`:
 - `?url=<encoded>`: streams the URL back with `Access-Control-Allow-Origin: *`. It requests ICY metadata, strips it from the audio, and records the title.
-- `/info?url=<encoded>`: JSON with the stream's details: title, name, genre, description, website, server, content type, format, bitrate, measured rate, sample rate, channels, metadata interval and bytes, bytes received, title changes, reconnects, connected seconds.
+- `stream_info` (command, `streamDetails(url)`): the stream's details: title, name, genre, description, website, server, content type, format, bitrate, measured rate, sample rate, channels, metadata interval and bytes, bytes received, title changes, reconnects, connected seconds. `icecast_title` (`icecastTitle(url)`) reads the title from the server's `status-json.xsl`. Both use IPC, not HTTP: the webview allows 6 connections per host, and with instant switch six streams fill them, so a request to the proxy would wait forever.
 
-Format, sample rate and channels come from the headers (`icy-br`, `ice-audio-info`) or, failing that, from the first MP3/ADTS frame header. A wrong token gets 404, and an upstream error gets 502. Every stream URL and remote fetch in the page must go through `proxied()`. SHOUTcast v1 `ICY 200 OK` responses aren't valid HTTP for `ureq` and fail.
+Format, sample rate and channels come from the headers (`icy-br`, `ice-audio-info` or `icy-audio-info`) or, failing that, from the first MP3/ADTS frame header. An ADTS AAC-LC header at 24 kHz or less is taken as HE-AAC (implicit SBR): the header has the core rate, and playback is at twice that. A wrong token gets 404, and an upstream error gets 502. Every stream URL in the page must go through `proxied()`, and other remote requests through Rust. SHOUTcast v1 `ICY 200 OK` responses aren't valid HTTP for `ureq` and fail.
 
 **Persistence.** Store keys:
 - `player1-title` / `player1-url` through `player6-*`: the cartridges
 - `last-selected-player` / `-title` / `-url`: the last cartridge played
 - `volume`, `balance`
-- `theme`, `visualizer-colors` (`classic` / `white` / `accent`), `autoplay`, `background`, `instant-switch`
+- `theme`, `visualizer-colors` (`classic` / `white` / `accent` / `off`; clicking the analyzer display cycles them), `autoplay`, `background`, `instant-switch`, `reconnect-minutes` (default 5, 0 = never give up)
 - `shortcut-play`, `shortcut-stop`, `shortcut-toggle` (empty string = no shortcut)
 
 The first run imports the Electron version's `<config dir>/qust/config.json`. `loadData` turns Rust's `null` into `undefined`.
 
-**Player state.** `script.js` has `state`: `stopped` / `connecting` / `playing` / `buffering` / `paused`. `setState()` re-renders the buttons, cartridges, title, clock and loader, and broadcasts `player-status`. Stop disconnects every stream. A pause longer than `LIVE_RESUME_SECONDS` reloads the stream on resume, rejoining the live point. While playing, the page polls `/info` every 2 s. The title comes from ICY, then the Icecast `status-json.xsl` fallback, then the stream or cartridge name. Cartridges are rendered from the `cartridges` array (`is-empty` / `is-active` / `is-playing` classes).
+**Player state.** `script.js` has `state`: `stopped` / `connecting` / `playing` / `buffering` / `paused`. `setState()` re-renders the buttons, cartridges, title, clock and loader, and broadcasts `player-status`. Stop disconnects every stream. A pause longer than `LIVE_RESUME_SECONDS` reloads the stream on resume, rejoining the live point. While playing, the page polls `stream_info` every 2 s. The title comes from ICY, then the Icecast `status-json.xsl` fallback, then the stream or cartridge name. Cartridges are rendered from the `cartridges` array (`is-empty` / `is-active` / `is-playing` classes).
 
 **Streams and instant switch.** There's no fixed `<audio>`: `streams` maps each stream URL to its own `Audio` element (`streamFor` / `unload`, with `current()` the active one). Keying by URL means reordering cartridges doesn't disturb them.
 - **Instant switch** (the ⚡ button, `instant-switch` in the store): while playing, every loaded cartridge streams in the background at level 0.
 - **`syncStreams()`:** keeps exactly the wanted streams connected (the active one while playing, plus every cartridge in instant mode) and sets the levels (active 1, others 0). Call it after anything that changes cartridges, the active slot or the state.
 - **`play()`:** when the target is already live (`isLive`), it switches immediately with no reconnect. `clockStart` resets the clock for the new station.
 - **`pause()`:** pauses only the active stream. Resuming within `LIVE_RESUME_SECONDS` applies only to the same URL (`pausedUrl`).
+
+**Reconnecting.** `lost()` runs when the active stream drops: `waiting` while playing (buffer ran out), `error` or `ended` after it played, or the watchdog. The first try is immediate, then one every second (counted from the previous try's start) for 15 tries, then every 15 s, until `reconnect-minutes` runs out ("Connection lost"). Each try (`reconnect()`) gives the URL a fresh element, and one that isn't playing after 12 s counts as failed. Playing for 10 s ends the sequence. A stream that never played isn't retried ("Couldn't play this stream"). The clock carries over (`clockBase`), and so does the title until the new connection sends one. Background streams that drop are re-synced after 15 s.
+
+**Watchdog.** `watch()` runs every second. It resumes a suspended `AudioContext` (`spectrum.wake()`). If the active stream's `currentTime` hasn't moved for 3 s while `playing`, it calls `lost()`. If the context's clock froze too, it first calls `restartAudio()`: a new context (`spectrum.reset()`) and new elements, since an element feeds only one context. When the context stops rendering (device change, sleep), the element's clock, the bars and the sound all stop with no event, so this is the only way to catch it.
 
 **Visualizer.** Once its 44.1 kHz `AudioContext` runs, `Spectrum` has a shared input: input → gain (volume) → stereo panner (balance) → speakers, and input → splitter → two analysers. So the bars ignore the volume. Each stream joins with `attach(element)`, which routes element → its own gain → input. `setLevel(element, 0 | 1)` fades a stream in or out over ~15 ms, and `detach` removes it. Before the context runs, or if Web Audio fails, levels fall back to `element.volume`. The analysis is an MDCT that builds 19 bars with falling peaks, at a fixed 60 updates/s. The canvas is a 75×16 pixel grid (3 px bars, 1 px gaps, 16 rows with one color per row). It's shown at 1:1, scaled only by whole numbers on high-DPI screens with `image-rendering: pixelated`. `setLoading(true)` (connecting / buffering) shows a row-of-blocks pulse that crossfades with the bars over 0.5 s.
 

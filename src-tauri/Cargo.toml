@@ -27,4 +27,3 @@ strip = true
 
 [target."cfg(windows)".dependencies]
 windows-registry = "0.100.0"
-windows-version = "0.100.0"

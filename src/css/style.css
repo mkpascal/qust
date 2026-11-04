@@ -99,10 +99,6 @@ body {
   -webkit-user-select: none;
 }
 
-html.mica body {
-  background: transparent;
-}
-
 .icons {
   display: none;
 }

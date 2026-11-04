@@ -11,7 +11,6 @@ use tauri::{AppHandle, Manager, RunEvent, State, Theme, WebviewUrl, WebviewWindo
 // Injected into every window as window.__QUST__ (see src/js/bridge.js).
 struct PageConfig {
     script: String,
-    mica: bool,
 }
 
 fn main() {
@@ -51,6 +50,8 @@ fn main() {
             background::get_background,
             background::set_background,
             background::take_play_request,
+            proxy::stream_info,
+            proxy::icecast_title,
             open_panel,
             set_theme
         ])
@@ -62,14 +63,12 @@ fn main() {
         })
         .setup(|app| {
             app.manage(store::Store::load(app.handle())?);
-            let mica = mica_supported();
             let config = serde_json::json!({
                 "proxy": proxy::start()?,
-                "mica": mica,
                 "accent": accent(),
                 "debug": cfg!(debug_assertions),
             });
-            app.manage(PageConfig { script: format!("window.__QUST__ = {config};"), mica });
+            app.manage(PageConfig { script: format!("window.__QUST__ = {config};") });
 
             // Started by Windows with the helper on: tray only, the player opens on demand.
             if background::enabled(app.handle()) {
@@ -131,10 +130,6 @@ fn build_window(
         builder = builder.additional_browser_args(
             "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required",
         );
-        if config.mica {
-            use tauri::window::{Effect, EffectsBuilder};
-            builder = builder.transparent(true).effects(EffectsBuilder::new().effect(Effect::Mica).build());
-        }
     }
     builder.build()
 }
@@ -190,14 +185,6 @@ fn set_theme(app: AppHandle, store: State<store::Store>, theme: String) {
     for window in app.webview_windows().values() {
         let _ = window.set_theme(theme);
     }
-}
-
-// Mica needs Windows 11 (build 22000). Elsewhere the page keeps its solid background.
-fn mica_supported() -> bool {
-    #[cfg(windows)]
-    return windows_version::OsVersion::current().build >= 22000;
-    #[cfg(not(windows))]
-    return false;
 }
 
 // The user's accent from the Windows palette: the base color, the lighter shade Windows uses in

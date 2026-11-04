@@ -4,9 +4,6 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const QUST = window.__QUST__ || {};
 
-if (QUST.mica) {
-    document.documentElement.classList.add('mica');
-}
 if (QUST.accent) {
     const style = document.documentElement.style;
     style.setProperty('--accent-base', QUST.accent.base);
@@ -31,8 +28,14 @@ function proxied(url) {
     return QUST.proxy + '?url=' + encodeURIComponent(url);
 }
 
-function proxiedInfo(url) {
-    return QUST.proxy + '/info?url=' + encodeURIComponent(url);
+// The proxy's details for a stream it relays (proxy.rs), and the title from the server's Icecast
+// status page. Both through IPC, so they never wait behind the stream connections.
+function streamDetails(url) {
+    return invoke('stream_info', { url });
+}
+
+function icecastTitle(url) {
+    return invoke('icecast_title', { url });
 }
 
 // Global shortcuts are stored as accelerators built from KeyboardEvent.code ("Ctrl+Alt+KeyH").

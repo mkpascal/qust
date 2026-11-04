@@ -2878,7 +2878,6 @@ dependencies = [
  "tauri-plugin-updater",
  "ureq",
  "windows-registry 0.100.0",
- "windows-version 0.100.0",
 ]
 
 [[package]]
@@ -3732,7 +3731,7 @@ dependencies = [
  "url",
  "windows",
  "windows-core",
- "windows-version 0.1.7",
+ "windows-version",
  "x11-dl",
 ]
 
@@ -4848,7 +4847,7 @@ dependencies = [
  "objc2-quartz-core",
  "raw-window-handle",
  "windows-sys 0.61.2",
- "windows-version 0.1.7",
+ "windows-version",
 ]
 
 [[package]]
@@ -5084,15 +5083,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-version"
-version = "0.100.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5d2a42ae19ff386c4680514519a225a2a99bcfada6aff0ab3766f928ff84365"
-dependencies = [
- "windows-link 0.100.0",
-]
-
-[[package]]
 name = "windows_aarch64_gnullvm"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5261,7 +5251,7 @@ dependencies = [
  "webview2-com",
  "windows",
  "windows-core",
- "windows-version 0.1.7",
+ "windows-version",
  "x11-dl",
 ]
 

@@ -2,7 +2,9 @@
 // the player (script.js) applies right away.
 
 const THEMES = { system: 'Use system setting', light: 'Light', dark: 'Dark' };
-const COLORS = { classic: 'Classic', white: 'White', accent: 'Accent color' };
+const COLORS = { classic: 'Classic', white: 'White', accent: 'Accent color', off: 'Off' };
+// How long the player keeps trying to reconnect a dropped stream, in minutes (0 = until stopped).
+const RECONNECT = { 1: '1 minute', 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 0: 'Until stopped' };
 
 const { Menu } = window.__TAURI__.menu;
 const { LogicalPosition } = window.__TAURI__.dpi;
@@ -13,12 +15,14 @@ const themeCombo = document.getElementById('themeCombo');
 const colorsCombo = document.getElementById('colorsCombo');
 const autoplayToggle = document.getElementById('autoplayToggle');
 const autoplayLabel = document.getElementById('autoplayLabel');
+const reconnectCombo = document.getElementById('reconnectCombo');
 
-let settings = { theme: 'system', colors: 'classic', autoplay: false };
+let settings = { theme: 'system', colors: 'classic', autoplay: false, reconnectMinutes: 5 };
 
 function render() {
     themeCombo.firstElementChild.textContent = THEMES[settings.theme];
     colorsCombo.firstElementChild.textContent = COLORS[settings.colors];
+    reconnectCombo.firstElementChild.textContent = RECONNECT[settings.reconnectMinutes];
     autoplayToggle.checked = settings.autoplay;
     autoplayLabel.textContent = settings.autoplay ? 'On' : 'Off';
 }
@@ -48,6 +52,14 @@ themeCombo.addEventListener('click', () => showChoices(themeCombo, THEMES, setti
     render();
 }));
 colorsCombo.addEventListener('click', () => showChoices(colorsCombo, COLORS, settings.colors, (value) => change('colors', 'visualizer-colors', value)));
+reconnectCombo.addEventListener('click', () => showChoices(reconnectCombo, RECONNECT, String(settings.reconnectMinutes), (value) => change('reconnectMinutes', 'reconnect-minutes', Number(value))));
+// Also changed from the player (clicking the analyzer cycles its colors).
+listen('settings-changed', ({ payload }) => {
+    if (payload.key === 'colors' && payload.value in COLORS) {
+        settings.colors = payload.value;
+        render();
+    }
+});
 autoplayToggle.addEventListener('change', () => change('autoplay', 'autoplay', autoplayToggle.checked));
 
 /* Global shortcuts */
@@ -229,10 +241,11 @@ listen('update-status', ({ payload }) => {
 });
 
 (async function init() {
-    const [theme, colors, autoplay, version, bindings] = await Promise.all([
+    const [theme, colors, autoplay, reconnectMinutes, version, bindings] = await Promise.all([
         loadData('theme'),
         loadData('visualizer-colors'),
         loadData('autoplay'),
+        loadData('reconnect-minutes'),
         window.__TAURI__.app.getVersion(),
         invoke('get_shortcuts'),
     ]);
@@ -241,6 +254,7 @@ listen('update-status', ({ payload }) => {
     if (theme in THEMES) settings.theme = theme;
     if (colors in COLORS) settings.colors = colors;
     settings.autoplay = autoplay === true;
+    if (reconnectMinutes in RECONNECT) settings.reconnectMinutes = reconnectMinutes;
     document.getElementById('version').textContent = version;
     update = await invoke('update_status');
     renderUpdate();

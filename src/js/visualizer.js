@@ -54,6 +54,9 @@
         }
 
         setColors(name, color) {
+            const off = name === "off"
+            if (off !== !!this.off) this.state = this.newState()
+            this.off = off
             this.colors = palette(name, color)
             if (this.frame) this.paint()
         }
@@ -168,6 +171,27 @@
 
         sampleRate() {
             return this.context ? this.context.sampleRate : 48000
+        }
+
+        clock() {
+            return this.wired ? this.context.currentTime : null
+        }
+
+        wake() {
+            if (this.context && this.context.state !== "running" && this.context.state !== "closed") this.context.resume().catch(() => {})
+        }
+
+        reset() {
+            if (this.context) this.context.close().catch(() => {})
+            this.context = null
+            this.analysers = null
+            this.input = null
+            this.gain = null
+            this.panner = null
+            this.waves = null
+            this.wired = false
+            this.failed = false
+            this.streams.clear()
         }
 
         latency() {
@@ -397,7 +421,7 @@
         draw(dt) {
             this.loaderTime = (this.loaderTime || 0) + dt
             this.loaderLevel = this.loading ? Math.min(1, (this.loaderLevel || 0) + dt / 0.2) : Math.max(0, (this.loaderLevel || 0) - dt / 0.5)
-            if (this.wired) this.analyse(dt)
+            if (this.wired && !this.off) this.analyse(dt)
             this.paint()
         }
 
@@ -426,7 +450,7 @@
             const ctx = this.canvas.getContext("2d")
             ctx.clearRect(0, 0, GRID_WIDTH, GRID_HEIGHT)
             const level = this.loaderLevel || 0
-            if (level < 1) {
+            if (level < 1 && !this.off) {
                 ctx.globalAlpha = 1 - level
                 this.paintBars(ctx)
             }

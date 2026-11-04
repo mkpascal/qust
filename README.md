@@ -20,14 +20,16 @@
 
 
 **Qust** is an open-source, simple, **qu**ick **st**reaming player.
-  - Small, efficient native app (a 2 MB installer) that plays streams through a native audio element,
+  - Small and light: a 2 MB installer, written in Rust with Tauri, with its own stream engine that reads song titles and stream details,
   - Features a cartridge-loading concept: six slots, saved with your volume, balance and settings,
+  - Reconnects by itself when a stream drops or stalls,
   - Classic pixel spectrum analyzer that follows the sound precisely, with volume and balance controls,
   - Shows the current song (ICY metadata), bitrate, sample rate and mono/stereo,
   - Stream information window with format, network, stability and ICY details,
   - Customizable global shortcuts (Ctrl + Alt + Insert / Ctrl + Alt + H by default),
+  - Background helper: starts with Windows in the tray, so shortcuts work even while Qust is closed,
   - Updates itself from the GitHub releases (checks every 8 hours, installs when you restart),
-  - Windows 11 look: Mica, light and dark themes, your accent color, native menus,
+  - Windows 11 look: light and dark themes, your accent color, system menus,
   - Compatible with all HTTP streaming servers (Icecast, SHOUTcast v2),
   - Supports Windows and macOS.
 

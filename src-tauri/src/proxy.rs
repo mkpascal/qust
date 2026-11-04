@@ -1,10 +1,12 @@
-// Local HTTP proxy for streams and their status pages. The webview enforces CORS, unlike the
-// Electron window that ran with webSecurity off: the visualizer needs CORS headers on the audio,
-// and Icecast's status-json.xsl rarely sends them. The proxy adds them, and the random token in
-// the path keeps other local programs from using it.
+// Local HTTP proxy for streams. The webview enforces CORS, unlike the Electron window that ran
+// with webSecurity off, and the visualizer needs CORS headers on the audio. The proxy adds them,
+// and the random token in the path keeps other local programs from using it.
 //
 // It also asks for ICY metadata, strips it from the audio and keeps the stream's details (title,
-// format, ICY headers, traffic) for the player and the Stream information window to poll on /info.
+// format, ICY headers, traffic), which the player and the Stream information window read with the
+// `stream_info` command. That and `icecast_title` go through IPC, not HTTP: with instant switch on,
+// six streams fill the webview's six connections per host, and a request to the proxy would wait
+// behind them.
 
 use serde_json::json;
 use std::collections::hash_map::RandomState;
@@ -98,7 +100,6 @@ fn serve(mut client: TcpStream, prefix: &str) -> io::Result<()> {
         .filter(|url| url.starts_with("http://") || url.starts_with("https://"));
     match (route, url) {
         ("", Some(url)) => relay(client, method, &url),
-        ("/info", Some(url)) => info(client, &url),
         _ => not_found(&mut client),
     }
 }
@@ -107,42 +108,78 @@ fn not_found(client: &mut TcpStream) -> io::Result<()> {
     client.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 }
 
-fn info(mut client: TcpStream, url: &str) -> io::Result<()> {
-    let body = match infos().lock().unwrap().get(url) {
-        Some(info) => {
-            let measured = info
-                .baseline
-                .filter(|(at, _)| at.elapsed() >= Duration::from_secs(3))
-                .map(|(at, bytes)| ((info.bytes - bytes) as f64 * 8.0 / at.elapsed().as_secs_f64() / 1000.0).round() as u32);
-            json!({
-                "name": info.name,
-                "title": info.title,
-                "genre": info.genre,
-                "description": info.description,
-                "website": info.website,
-                "server": info.server,
-                "contentType": info.content_type,
-                "format": info.format,
-                "bitrate": info.bitrate.or(measured),
-                "rate": measured,
-                "samplerate": info.samplerate,
-                "channels": info.channels,
-                "metaint": info.metaint,
-                "bytes": info.bytes,
-                "metaBytes": info.meta_bytes,
-                "titleChanges": info.title_changes,
-                "reconnects": info.connections.saturating_sub(1),
-                "connectedSeconds": info.started.map(|at| at.elapsed().as_secs()),
+// The details of a stream the proxy is relaying ({} when it isn't).
+#[tauri::command]
+pub fn stream_info(url: String) -> serde_json::Value {
+    let infos = infos().lock().unwrap();
+    let Some(info) = infos.get(&url) else {
+        return json!({});
+    };
+    let measured = info
+        .baseline
+        .filter(|(at, _)| at.elapsed() >= Duration::from_secs(3))
+        .map(|(at, bytes)| ((info.bytes - bytes) as f64 * 8.0 / at.elapsed().as_secs_f64() / 1000.0).round() as u32);
+    json!({
+        "name": info.name,
+        "title": info.title,
+        "genre": info.genre,
+        "description": info.description,
+        "website": info.website,
+        "server": info.server,
+        "contentType": info.content_type,
+        "format": info.format,
+        "bitrate": info.bitrate.or(measured),
+        "rate": measured,
+        "samplerate": info.samplerate,
+        "channels": info.channels,
+        "metaint": info.metaint,
+        "bytes": info.bytes,
+        "metaBytes": info.meta_bytes,
+        "titleChanges": info.title_changes,
+        "reconnects": info.connections.saturating_sub(1),
+        "connectedSeconds": info.started.map(|at| at.elapsed().as_secs()),
+    })
+}
+
+// The title from the server's Icecast status page (status-json.xsl), for streams without ICY
+// titles: the source whose listen URL has the stream's path, or the first one for a stream at "/".
+#[tauri::command]
+pub async fn icecast_title(url: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let stream = tauri::Url::parse(&url).ok()?;
+        let mut status = stream.clone();
+        status.set_path("/status-json.xsl");
+        status.set_query(None);
+        let body = ureq::AgentBuilder::new()
+            .timeout(Duration::from_secs(10))
+            .user_agent(concat!("Qust/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .get(status.as_str())
+            .call()
+            .ok()?
+            .into_string()
+            .ok()?;
+        let data: serde_json::Value = serde_json::from_str(&body).ok()?;
+        let sources = match &data["icestats"]["source"] {
+            serde_json::Value::Array(sources) => sources.clone(),
+            serde_json::Value::Null => Vec::new(),
+            source => vec![source.clone()],
+        };
+        let source = if url.ends_with('/') {
+            sources.first()
+        } else {
+            sources.iter().find(|source| {
+                source["listenurl"]
+                    .as_str()
+                    .and_then(|listen| tauri::Url::parse(listen).ok())
+                    .is_some_and(|listen| listen.path() == stream.path())
             })
-        }
-        None => json!({}),
-    }
-    .to_string();
-    write!(
-        client,
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-cache\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    )
+        }?;
+        source["title"].as_str().map(str::trim).filter(|title| !title.is_empty()).map(str::to_string)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 fn relay(mut client: TcpStream, method: &str, url: &str) -> io::Result<()> {
@@ -162,7 +199,9 @@ fn relay(mut client: TcpStream, method: &str, url: &str) -> io::Result<()> {
 
     let header = |name: &str| response.header(name).map(str::trim).filter(|value| !value.is_empty());
     let number = |value: &str| value.split(|c: char| !c.is_ascii_digit()).next()?.parse::<u32>().ok();
+    // Icecast sends ice-audio-info, some other servers (AIS) icy-audio-info.
     let audio_info: HashMap<String, String> = header("ice-audio-info")
+        .or_else(|| header("icy-audio-info"))
         .unwrap_or("")
         .split(';')
         .filter_map(|pair| pair.split_once('='))
@@ -304,7 +343,14 @@ fn frame_header(b: &[u8]) -> Option<(Frame, usize)> {
         if channels == 0 || length < 7 {
             return None;
         }
-        let format = ["AAC Main", "AAC-LC", "AAC SSR", "AAC LTP"][(b[2] >> 6) as usize];
+        let profile = b[2] >> 6;
+        // HE-AAC (AAC+) signals SBR implicitly: the header has the AAC-LC core at half the rate
+        // (22.05 / 24 kHz), and the decoder plays it at twice that. A plain AAC-LC stream at 24 kHz
+        // or less is rare enough to take it for HE-AAC.
+        if profile == 1 && samplerate <= 24000 {
+            return Some((Frame { format: "HE-AAC", samplerate: samplerate * 2, channels, bitrate: None }, length));
+        }
+        let format = ["AAC Main", "AAC-LC", "AAC SSR", "AAC LTP"][profile as usize];
         return Some((Frame { format, samplerate, channels, bitrate: None }, length));
     }
 
