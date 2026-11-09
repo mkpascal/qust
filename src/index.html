@@ -20,6 +20,11 @@
       <symbol id="i-settings" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.9" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2.317 2.317" /><circle cx="8" cy="8" r="3.9" fill="none" stroke="currentColor" stroke-width="2.2" /></symbol>
       <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M8 7.2v4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="8" cy="4.9" r=".95" /></symbol>
       <symbol id="i-bolt" viewBox="0 0 16 16"><path d="M9.2 1.6 3.6 9h3.6l-1 5.4L12.4 7H8.8z" /></symbol>
+      <symbol id="i-list" viewBox="0 0 16 16"><path d="M5.5 4h8M5.5 8h8M5.5 12h8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /><circle cx="2.6" cy="4" r=".95" /><circle cx="2.6" cy="8" r=".95" /><circle cx="2.6" cy="12" r=".95" /></symbol>
+      <symbol id="i-chevron" viewBox="0 0 16 16"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+      <symbol id="i-note" viewBox="0 0 16 16"><path d="M6.5 11.5V3.6l6-1.3v7.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /><ellipse cx="4.6" cy="11.6" rx="1.9" ry="1.5" /><ellipse cx="10.6" cy="9.8" rx="1.9" ry="1.5" /></symbol>
+      <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2.4-2.4a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.4 6.6a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></symbol>
+      <symbol id="i-radio" viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.6" /><path d="M5.2 5.2a4 4 0 0 0 0 5.6M10.8 5.2a4 4 0 0 1 0 5.6M3.1 3.1a7 7 0 0 0 0 9.8M12.9 3.1a7 7 0 0 1 0 9.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></symbol>
       <symbol id="i-balance" viewBox="0 0 16 16"><path d="M2 8h12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /><path d="M2.5 5v6M13.5 5v6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /><circle cx="8" cy="8" r="2.2" /></symbol>
     </svg>
 
@@ -47,20 +52,29 @@
           </div>
         </div>
 
-        <div class="sliders island">
-          <div class="slider-row">
-            <svg class="slider-icon"><use id="volumeIcon" href="#i-vol-2" /></svg>
-            <div class="slider" id="volumeSlider" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100">
+        <!-- For a file (it has a duration), a seek bar on top, and volume and balance share a line. -->
+        <div class="sliders island" id="sliders">
+          <div class="slider-row seek-row">
+            <div class="slider" id="seekSlider" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0" aria-valuemax="10000">
               <div class="slider-rail"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
             </div>
-            <span class="slider-value" id="volumeValue">50%</span>
+            <span class="seek-time" id="seekTime">0:00 / 0:00</span>
           </div>
-          <div class="slider-row">
-            <svg class="slider-icon"><use href="#i-balance" /></svg>
-            <div class="slider is-centered" id="balanceSlider" role="slider" tabindex="0" aria-label="Balance" aria-valuemin="-100" aria-valuemax="100" title="Double-click to center">
-              <div class="slider-rail"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+          <div class="slider-pair">
+            <div class="slider-row">
+              <svg class="slider-icon"><use id="volumeIcon" href="#i-vol-2" /></svg>
+              <div class="slider" id="volumeSlider" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100">
+                <div class="slider-rail"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+              </div>
+              <span class="slider-value" id="volumeValue">50%</span>
             </div>
-            <span class="slider-value" id="balanceValue">C</span>
+            <div class="slider-row">
+              <svg class="slider-icon"><use href="#i-balance" /></svg>
+              <div class="slider is-centered" id="balanceSlider" role="slider" tabindex="0" aria-label="Balance" aria-valuemin="-100" aria-valuemax="100" title="Double-click to center">
+                <div class="slider-rail"><div class="slider-fill"></div><div class="slider-thumb"></div></div>
+              </div>
+              <span class="slider-value" id="balanceValue">C</span>
+            </div>
           </div>
         </div>
 
@@ -74,23 +88,40 @@
         </div>
       </section>
 
-      <section class="cartridges" id="cartridges" aria-label="Cartridges"></section>
+      <section class="deck">
+        <div class="cartridges" id="cartridges" aria-label="Cartridges"></div>
+        <div class="deck-bar island">
+          <button class="button" id="playlistButton" aria-expanded="false" aria-controls="drawer" title="Show or hide the playlist">
+            <svg><use href="#i-list" /></svg>Playlist<svg class="chevron"><use href="#i-chevron" /></svg>
+          </button>
+          <button class="button" id="addFileButton" title="Add music files or playlists from your computer"><svg><use href="#i-note" /></svg>Add file</button>
+          <button class="button" id="addUrlButton" title="Add a stream or an online audio file"><svg><use href="#i-link" /></svg>Add URL</button>
+        </div>
+      </section>
     </main>
+
+    <section class="drawer" id="drawer" aria-label="Playlist" inert>
+      <div class="playlist island" id="playlist" role="listbox" tabindex="0" aria-multiselectable="true" aria-label="Playlist"></div>
+      <div class="playlist-status">
+        <span id="playlistCount"></span>
+        <span id="playlistHint">Double-click to play · drag to reorder · Delete to remove</span>
+      </div>
+    </section>
 
     <div class="dialog-backdrop" id="dialog" hidden>
       <form class="dialog" id="dialogForm" role="dialog" aria-modal="true" aria-labelledby="dialogTitle" novalidate>
         <div class="dialog-body">
           <h2 id="dialogTitle">Load cartridge</h2>
-          <label class="field">Name
+          <label class="field"><span id="nameLabel">Name</span>
             <input class="textbox" id="streamTitle" type="text" autocomplete="off" spellcheck="false" placeholder="My station" />
           </label>
-          <label class="field">Stream URL
+          <label class="field"><span id="urlLabel">Stream URL</span>
             <input class="textbox" id="streamURL" type="text" autocomplete="off" spellcheck="false" placeholder="https://" />
           </label>
           <div class="dialog-error" id="dialogError" hidden></div>
         </div>
         <div class="dialog-footer">
-          <button class="button accent" type="submit">Save</button>
+          <button class="button accent" type="submit" id="saveButton">Save</button>
           <button class="button" type="button" id="ejectButton">Eject</button>
           <button class="button" type="button" id="cancelButton">Cancel</button>
         </div>

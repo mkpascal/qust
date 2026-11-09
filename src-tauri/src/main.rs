@@ -1,11 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod background;
+mod playlist;
 mod proxy;
 mod shortcuts;
 mod store;
 mod updater;
 
+use tauri::window::Color;
 use tauri::{AppHandle, Manager, RunEvent, State, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
 // Injected into every window as window.__QUST__ (see src/js/bridge.js).
@@ -30,6 +32,7 @@ fn main() {
     builder
         .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(shortcuts::handle).build())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![background::LAUNCH_ARG]),
@@ -52,6 +55,9 @@ fn main() {
             background::take_play_request,
             proxy::stream_info,
             proxy::icecast_title,
+            playlist::set_playlist_open,
+            playlist::expand_paths,
+            playlist::pick_files,
             open_panel,
             set_theme
         ])
@@ -60,11 +66,16 @@ fn main() {
             if window.label() == "settings" && matches!(event, WindowEvent::Destroyed) {
                 shortcuts::set_paused(window.app_handle(), false);
             }
+            if let (WindowEvent::ThemeChanged(theme), Some(window)) = (event, window.app_handle().get_webview_window(window.label())) {
+                let _ = window.set_background_color(Some(background(*theme)));
+            }
         })
         .setup(|app| {
             app.manage(store::Store::load(app.handle())?);
+            let (proxy, files) = proxy::start()?;
             let config = serde_json::json!({
-                "proxy": proxy::start()?,
+                "proxy": proxy,
+                "files": files,
                 "accent": accent(),
                 "debug": cfg!(debug_assertions),
             });
@@ -97,7 +108,7 @@ fn main() {
 }
 
 pub fn build_player(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    build_window(app, "main", "index.html", "Qust", (860.0, 267.0), None)
+    build_window(app, "main", "index.html", "Qust", (playlist::PLAYER_WIDTH, playlist::player_height(app)), None)
 }
 
 fn build_window(
@@ -131,7 +142,20 @@ fn build_window(
             "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required",
         );
     }
-    builder.build()
+    let window = builder.build()?;
+    if let Ok(theme) = window.theme() {
+        let _ = window.set_background_color(Some(background(theme)));
+    }
+    Ok(window)
+}
+
+// The page's background (--bg in style.css), also shown where the window grows before the page
+// repaints (the playlist drawer opening).
+fn background(theme: Theme) -> Color {
+    match theme {
+        Theme::Light => Color(0xf3, 0xf3, 0xf3, 0xff),
+        _ => Color(0x20, 0x20, 0x20, 0xff),
+    }
 }
 
 // Logical position that centers a window of `size` over `owner`, kept on the owner's monitor.
@@ -184,6 +208,9 @@ fn set_theme(app: AppHandle, store: State<store::Store>, theme: String) {
     let theme = stored_theme(&app);
     for window in app.webview_windows().values() {
         let _ = window.set_theme(theme);
+        if let Ok(theme) = window.theme() {
+            let _ = window.set_background_color(Some(background(theme)));
+        }
     }
 }
 

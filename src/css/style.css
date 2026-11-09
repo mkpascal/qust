@@ -40,6 +40,11 @@
   --dialog-stroke: rgba(117, 117, 117, 0.4);
   --error: #ff99a4;
   --display: #121212;
+  --row-selected: rgba(255, 255, 255, 0.0698);
+  --row-selected-hover: rgba(255, 255, 255, 0.0837);
+  /* The player's height, and the drawer's under it (PLAYER_HEIGHT and DRAWER_HEIGHT in playlist.rs). */
+  --player-height: 267px;
+  --drawer-height: 320px;
 }
 
 @media (prefers-color-scheme: light) {
@@ -75,6 +80,8 @@
     --dialog-stroke: rgba(0, 0, 0, 0.0578);
     --error: #c42b1c;
     --display: #1c1c1c;
+    --row-selected: rgba(0, 0, 0, 0.0373);
+    --row-selected-hover: rgba(0, 0, 0, 0.0578);
   }
 }
 
@@ -129,7 +136,7 @@ svg {
   display: grid;
   grid-template-columns: 330px 1fr;
   gap: 28px;
-  height: 100%;
+  height: var(--player-height);
   padding: 6px 22px 22px;
 }
 
@@ -458,6 +465,77 @@ svg {
   text-align: right;
 }
 
+/* A stream: volume over balance. A file: the seek bar over volume and balance, side by side. */
+.seek-row {
+  display: none;
+}
+
+.slider-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sliders.is-seekable .seek-row {
+  display: flex;
+}
+
+.sliders.is-seekable .slider-pair {
+  flex-direction: row;
+  gap: 14px;
+}
+
+.sliders.is-seekable .slider-pair .slider-row {
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sliders.is-seekable .slider-pair .slider-value {
+  width: 30px;
+  font-size: 11px;
+}
+
+.sliders.is-seekable .slider-pair .slider-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Smaller thumbs on the shared line */
+.sliders.is-seekable .slider-pair .slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+}
+
+.sliders.is-seekable .slider-pair .slider-rail {
+  right: 8px;
+  left: 8px;
+}
+
+.seek-row .slider-rail {
+  left: 8px;
+}
+
+.seek-time {
+  min-width: 78px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.seek-time b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.slider[aria-disabled="true"] .slider-fill,
+.slider[aria-disabled="true"] .slider-thumb::after {
+  background: var(--text-disabled);
+}
+
 /* Transport */
 
 .transport {
@@ -487,13 +565,47 @@ svg {
   box-shadow: 0 0 0 2px var(--bg);
 }
 
-/* Cartridges */
+/* Cartridges, over the playlist buttons (aligned with the transport buttons) */
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
 
 .cartridges {
   display: grid;
+  flex: 1;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
+  min-height: 0;
+}
+
+.deck-bar {
+  display: flex;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.deck-bar .button {
+  flex: 1;
+  gap: 7px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.deck-bar .chevron {
+  width: 12px;
+  height: 12px;
+  margin-left: 1px;
+  color: var(--text-2);
+  transition: transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+#playlistButton[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
 }
 
 .cartridge {
@@ -524,9 +636,9 @@ svg {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 0;
   min-height: 0;
-  padding: 10px 14px;
+  padding: 4px 12px;
 }
 
 .cartridge-body:hover,
@@ -545,13 +657,12 @@ svg {
 }
 
 .cartridge-name {
-  display: -webkit-box;
   max-width: 100%;
   overflow: hidden;
-  font: 600 16px/22px var(--font-display);
+  font: 600 15px/20px var(--font-display);
   text-align: center;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .cartridge-host {
@@ -564,11 +675,16 @@ svg {
   text-overflow: ellipsis;
 }
 
+.cartridge-eject svg {
+  width: 14px;
+  height: 14px;
+}
+
 .cartridge-eject {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  height: 22px;
   border-top: 1px solid var(--card-stroke);
   color: var(--text-2);
 }
@@ -657,7 +773,8 @@ svg {
   display: flex;
 }
 
-.equalizer i {
+.equalizer i,
+.row-eq i {
   width: 2px;
   height: 100%;
   border-radius: 1px;
@@ -666,11 +783,13 @@ svg {
   animation: equalizer 0.9s ease-in-out infinite alternate;
 }
 
-.equalizer i:nth-child(2) {
+.equalizer i:nth-child(2),
+.row-eq i:nth-child(2) {
   animation-delay: -0.3s;
 }
 
-.equalizer i:nth-child(3) {
+.equalizer i:nth-child(3),
+.row-eq i:nth-child(3) {
   animation-delay: -0.6s;
 }
 
@@ -710,6 +829,212 @@ svg {
 @keyframes equalizer {
   from { transform: scaleY(0.25); }
   to { transform: scaleY(1); }
+}
+
+/* Playlist drawer: under the player, shown by growing the window (playlist.rs) */
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: var(--drawer-height);
+  padding: 0 22px 14px;
+}
+
+.playlist {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.playlist::-webkit-scrollbar {
+  width: 10px;
+}
+
+.playlist::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background: var(--text-3) padding-box;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  padding: 0 10px 0 4px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.row:hover {
+  background: var(--subtle-hover);
+}
+
+.row.is-selected {
+  background: var(--row-selected);
+}
+
+.row.is-selected:hover {
+  background: var(--row-selected-hover);
+}
+
+/* Fluent's selection pill */
+.row.is-selected::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.row-number {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  width: 34px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-number svg {
+  width: 14px;
+  height: 14px;
+}
+
+.row-eq {
+  display: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+  margin-right: 2px;
+  color: var(--accent);
+}
+
+.row.is-playing .row-eq {
+  display: flex;
+}
+
+.row.is-playing .row-index {
+  display: none;
+}
+
+.row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row-detail {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row.is-active .row-title,
+.row.is-active .row-number {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.row.is-missing .row-title {
+  color: var(--text-disabled);
+  text-decoration: line-through;
+}
+
+.row.is-cartridge .row-number {
+  color: var(--text-2);
+}
+
+.playlist-divider {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--card-stroke);
+  box-shadow: 0 1px 0 var(--card-edge);
+}
+
+/* Where dropped files or dragged tracks go */
+.row.drop-before::after,
+.row.drop-after::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  left: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.row.drop-before::after {
+  top: -1px;
+}
+
+.row.drop-after::after {
+  bottom: -1px;
+}
+
+.playlist.is-reordering .row {
+  cursor: grabbing;
+}
+
+.playlist-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin: 6px 4px 4px;
+  padding: 18px 16px;
+  border: 1px dashed var(--empty-stroke);
+  border-radius: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.playlist-empty b {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.playlist.is-drop-empty .playlist-empty {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.playlist-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+#playlistCount {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Settings */
@@ -1119,6 +1444,14 @@ body.settings-window::-webkit-scrollbar-thumb {
   outline: none;
 }
 
+/* A local file's path in the Edit track dialog: shown, not edited. */
+.textbox:read-only {
+  border-bottom-color: var(--control-stroke);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+}
+
 .dialog-error {
   color: var(--error);
   font-size: 12px;
@@ -1140,6 +1473,7 @@ body.settings-window::-webkit-scrollbar-thumb {
 @media (prefers-reduced-motion: reduce) {
   .title-row.is-scrolling span,
   .equalizer i,
+  .row-eq i,
   .cartridge.is-preloading .cartridge-bolt,
   .cartridge.is-dropped,
   .dialog {

@@ -28,6 +28,11 @@ function proxied(url) {
     return QUST.proxy + '?url=' + encodeURIComponent(url);
 }
 
+// A local file (a playlist entry), served where it is by the file server in proxy.rs.
+function fileUrl(path) {
+    return QUST.files + '?path=' + encodeURIComponent(path);
+}
+
 // The proxy's details for a stream it relays (proxy.rs), and the title from the server's Icecast
 // status page. Both through IPC, so they never wait behind the stream connections.
 function streamDetails(url) {

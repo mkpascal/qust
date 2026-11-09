@@ -22,6 +22,7 @@
 **Qust** is an open-source, simple, **qu**ick **st**reaming player.
   - Small and light: a 2 MB installer, written in Rust with Tauri, with its own stream engine that reads song titles and stream details,
   - Features a cartridge-loading concept: six slots, saved with your volume, balance and settings,
+  - Playlist drawer: drop music files, folders or .m3u / .pls lists, or add any stream or online audio file. Files play from where they are, with seeking,
   - Reconnects by itself when a stream drops or stalls,
   - Classic pixel spectrum analyzer that follows the sound precisely, with volume and balance controls,
   - Shows the current song (ICY metadata), bitrate, sample rate and mono/stereo,
