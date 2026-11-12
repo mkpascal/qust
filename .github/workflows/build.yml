@@ -118,7 +118,7 @@ jobs:
 
       # The bundle, the disk image and the update archive (a universal binary made with lipo).
       - run: |
-          packaging/macos/build-app.sh --version "$VERSION" \
+          bash packaging/macos/build-app.sh --version "$VERSION" \
             --arm64 "target/aarch64-apple-darwin/release/qust" \
             --x86_64 "target/x86_64-apple-darwin/release/qust" \
             --icon "icons/icon.icns" --out dist
