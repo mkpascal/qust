@@ -1,0 +1,9 @@
+[package]
+name = "qust-ui-playlist"
+version = "0.1.0"
+description = "Qust's playlist drawer"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]

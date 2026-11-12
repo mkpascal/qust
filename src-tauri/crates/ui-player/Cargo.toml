@@ -1,0 +1,9 @@
+[package]
+name = "qust-ui-player"
+version = "0.1.0"
+description = "Qust's player window: display, sliders, transport, cartridges and dialog"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]

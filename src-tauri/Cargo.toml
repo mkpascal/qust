@@ -30,7 +30,21 @@ strip = true
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [workspace]
-members = ["crates/codecs", "crates/audio", "crates/spectrum", "crates/player", "crates/updater"]
+members = [
+    "crates/codecs",
+    "crates/audio",
+    "crates/spectrum",
+    "crates/player",
+    "crates/updater",
+    "crates/fluent",
+    "crates/ui",
+    "crates/ui-player",
+    "crates/ui-playlist",
+    "crates/ui-panels",
+    "crates/shell",
+    "crates/text",
+    "crates/app",
+]
 
 # Debug builds decode audio in real time too: without optimization the decoders and the resampler
 # would be many times slower.

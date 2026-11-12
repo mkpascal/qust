@@ -1,0 +1,48 @@
+// The executable's resources, as tauri-build made them for qust.exe: the icon and the version
+// information (Explorer, the taskbar and the volume mixer show "Qust" from FileDescription).
+// The manifest is GPUI's (gpui's default "windows-manifest" feature embeds it: PerMonitorV2 DPI
+// awareness, common controls 6, segment heap, asInvoker), so none here: two manifests don't link.
+//
+// For the app's build.rs, e.g. with embed-resource:
+//   embed_resource::compile("../shell/resources/qust.rc", embed_resource::ParamsMacrosAndIncludeDirs(
+//       [("QUST_VERSION", "\"1.1.5\""), ("QUST_VERSION_NUMBERS", "1,1,5,0")], ["../../icons"]))
+// with the version from package.json.
+//
+// Icon 1: GPUI's windows load icon resource 1 (LoadImageW(…, 1, IMAGE_ICON)), and so does the tray.
+
+#include <winver.h>
+
+#ifndef QUST_VERSION
+#define QUST_VERSION "1.1.5"
+#endif
+#ifndef QUST_VERSION_NUMBERS
+#define QUST_VERSION_NUMBERS 1,1,5,0
+#endif
+
+1 ICON "icon.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION QUST_VERSION_NUMBERS
+PRODUCTVERSION QUST_VERSION_NUMBERS
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "000004b0"
+        BEGIN
+            VALUE "CompanyName", "pascalmuangkhot"
+            VALUE "FileDescription", "Qust"
+            VALUE "FileVersion", QUST_VERSION
+            VALUE "ProductName", "Qust"
+            VALUE "ProductVersion", QUST_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0, 1200
+    END
+END

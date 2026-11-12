@@ -1,0 +1,9 @@
+[package]
+name = "qust-text"
+version = "0.1.0"
+description = "Text the toolkit cannot lay out by itself: right-to-left titles"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]
