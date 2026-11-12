@@ -49,17 +49,17 @@
 //! neither the drawer nor the player. The root paints the window background over the full
 //! height, so the drawer area is never unpainted while the window grows or shrinks.
 //!
-//! **Right-to-left titles**: a row's displayed strings are computed in one place,
-//! `Drawer::row_element` (`drawer.rs`), for the rows on screen only: apply `qust_text::shown` to
-//! `title` and `detail` there.
+//! **Right-to-left titles**: what a row draws of its title and detail is `qust_text::shown` of
+//! them, computed when the cartridge or the entry changes (`Drawer::row_element` reads it from a
+//! cache); tooltips and accessibility labels keep the logical text.
 //!
 //! # Modules
 //!
 //! - [`list`]: the arithmetic layout, the selection, keys, drop index, reveal, texts (no GPUI).
 //! - [`menu`]: the right-click menu and its actions.
 //! - [`host`]: the two seams.
-//! - [`drawer`]: the view, [`EqualizerLayer`], [`mount`].
-//! - [`text`]: kerning, Chromium's baseline and ellipsis (candidates for `qust-fluent`).
+//! - [`drawer`]: the view, [`mount`]; the playing row's [`EqualizerLayer`] is
+//!   `qust_fluent::EqualizerLayer`.
 //! - `harness` (feature `capture`): the reference fixtures' actions, for captures and tests.
 
 pub mod drawer;
@@ -68,8 +68,8 @@ pub mod harness;
 pub mod host;
 pub mod list;
 pub mod menu;
-pub mod text;
 
-pub use drawer::{mount, Drawer, EqualizerLayer, EqualizerPlacement, Stats};
+pub use drawer::{mount, Drawer, Stats};
+pub use qust_fluent::equalizer::{EqualizerLayer, EqualizerPlacement};
 pub use host::{DrawerHost, Panel, Pending, PlaylistCommands};
 pub use list::Item;

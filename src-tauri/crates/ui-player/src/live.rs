@@ -51,7 +51,7 @@ impl Render for ClockView {
             .font_display()
             .semibold()
             .type_size(22.0, 24.0)
-            .font_features(crate::text::tabular_kerning())
+            .tabular_nums()
             .whitespace_nowrap()
             .text_color(text)
             .child(icon(glyph, 10.0).text_color(glyph_color))

@@ -411,6 +411,29 @@ mod tests {
         }
     }
 
+    // A fixture with its `extends` chain merged in (deep merge, the fixture's own values win).
+    fn load_fixture(root: &std::path::Path, file: &str) -> Value {
+        fn merge(base: &mut Value, over: Value) {
+            match (base, over) {
+                (Value::Object(base), Value::Object(over)) => {
+                    for (key, value) in over {
+                        merge(base.entry(key).or_insert(Value::Null), value);
+                    }
+                }
+                (base, over) => *base = over,
+            }
+        }
+        let fixture: Value = serde_json::from_str(&std::fs::read_to_string(root.join(file)).expect("fixture")).expect("json");
+        match fixture.get("extends").and_then(Value::as_str) {
+            Some(parent) => {
+                let mut base = load_fixture(root, &format!("states/{parent}.json"));
+                merge(&mut base, fixture);
+                base
+            }
+            None => fixture,
+        }
+    }
+
     // Every player render that shows a frame: the canvas region, device pixel by device pixel,
     // against `rasterize` (no GPUI involved: this checks the color maths and the scaling rule).
     #[test]
@@ -426,7 +449,7 @@ mod tests {
             let scale: f32 = scale.parse().expect("scale");
             let layout: Value = serde_json::from_str(&std::fs::read_to_string(root.join(format!("layout/player/{state}.json"))).expect("layout")).expect("json");
             let fixture_file = layout["fixture"].as_str().unwrap_or("").split(' ').next().unwrap_or("").to_string();
-            let fixture: Value = serde_json::from_str(&std::fs::read_to_string(root.join(&fixture_file)).expect("fixture")).expect("json");
+            let fixture = load_fixture(&root, &fixture_file);
             // States with an open dialog dim the canvas under the backdrop; skip those.
             if layout["elements"].as_array().unwrap().iter().any(|e| e["name"] == "#dialog") {
                 continue;

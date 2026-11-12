@@ -24,6 +24,8 @@ fn main() {
                 i += 1;
                 themes = args.get(i).map(|t| t.split(',').map(str::to_string).collect()).unwrap_or_default();
             }
+            // Compare with reference/renders-gray (grayscale text, as the real window drew most).
+            "--gray" => std::env::set_var("QUST_REFERENCE_SET", "renders-gray"),
             "--out" => {
                 i += 1;
                 if let Some(dir) = args.get(i) {
@@ -35,7 +37,8 @@ fn main() {
         }
         i += 1;
     }
-    let all: Vec<String> = fixture::all().into_iter().filter(|n| n.starts_with("settings-") || n.starts_with("info-")).collect();
+    // Every fixture of the two windows (`settings-*`, `info-*`, and others such as `text-rtl-info`).
+    let all: Vec<String> = fixture::all().into_iter().filter(|n| n.starts_with("settings-") || n.starts_with("info-") || Fixture::load(n).is_ok_and(|f| f.window == "settings" || f.window == "info")).collect();
     let chosen: Vec<String> = if names.is_empty() { all } else { all.into_iter().filter(|n| names.iter().any(|p| n == p || n.starts_with(p.as_str()))).collect() };
     let mut jobs = Vec::new();
     for name in &chosen {

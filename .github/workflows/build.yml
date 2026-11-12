@@ -2,7 +2,8 @@ name: Build
 
 # Every push to main builds Windows and macOS. When the version in package.json has no release
 # yet, the push also publishes a GitHub release "Qust vX.Y.Z" with the installers and the signed
-# updater files (latest.json), which installed copies of Qust update from.
+# updater files (latest.json), which installed copies of Qust update from: the GPUI versions and
+# the Tauri ones before them read the same latest.json.
 
 on:
   push:
@@ -13,6 +14,11 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # The Cargo workspace.
+  WORKSPACE: src-tauri
 
 jobs:
   release:
@@ -29,8 +35,6 @@ jobs:
         run: |
           version=$(node -p "require('./package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       # A draft until both platforms have uploaded, so the updater never sees a half-done release.
       # A draft left by a failed run is replaced; a published release means nothing to do.
@@ -51,67 +55,118 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  build:
+  windows:
     needs: release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            args: ''
-            rust-targets: ''
-          - platform: macos-latest
-            args: '--target universal-apple-darwin'
-            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
-
-    runs-on: ${{ matrix.platform }}
-    permissions:
-      contents: write
-
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust-targets }}
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: '${{ env.WORKSPACE }} -> target'
 
-      - run: npm ci
+      # GPUI needs the Windows SDK's fxc.exe and rc.exe, which the runner image has. NSIS is
+      # installed on the image too (build-installer.mjs finds it in Program Files).
+      - run: cargo build --release --locked -p qust-app
+        working-directory: ${{ env.WORKSPACE }}
 
-      # Releases also build the signed updater files (tauri.release.conf.json), which need the
-      # signing key from the repository secrets.
-      - uses: tauri-apps/tauri-action@v0
+      - run: node packaging/windows/build-installer.mjs --exe "$WORKSPACE/target/release/qust.exe" --version "$VERSION" --icon "$WORKSPACE/icons/icon.ico" --out dist
+
+      # Releases only: the updaters' signature (the key comes from the repository secrets).
+      - if: needs.release.outputs.id
+        run: cargo run --release --locked -p qust-updater --features sign --bin qust-sign -- "$GITHUB_WORKSPACE/dist/Qust_${VERSION}_x64-setup.exe" --version "$VERSION"
+        working-directory: ${{ env.WORKSPACE }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ needs.release.outputs.id && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ needs.release.outputs.id && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
-        with:
-          releaseId: ${{ needs.release.outputs.id }}
-          args: ${{ matrix.args }} ${{ needs.release.outputs.id && '--config src-tauri/tauri.release.conf.json' || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: qust-${{ matrix.platform }}
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          name: qust-windows
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    needs: release
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: '${{ env.WORKSPACE }} -> target'
+
+      - run: |
+          cargo build --release --locked -p qust-app --target aarch64-apple-darwin
+          cargo build --release --locked -p qust-app --target x86_64-apple-darwin
+        working-directory: ${{ env.WORKSPACE }}
+
+      # The bundle, the disk image and the update archive (a universal binary made with lipo).
+      - run: |
+          packaging/macos/build-app.sh --version "$VERSION" \
+            --arm64 "$WORKSPACE/target/aarch64-apple-darwin/release/qust" \
+            --x86_64 "$WORKSPACE/target/x86_64-apple-darwin/release/qust" \
+            --icon "$WORKSPACE/icons/icon.icns" --out dist
+          rm -rf dist/Qust.app
+
+      - if: needs.release.outputs.id
+        run: cargo run --release --locked -p qust-updater --features sign --bin qust-sign -- "$GITHUB_WORKSPACE/dist/Qust_${VERSION}_universal.app.tar.gz" --version "$VERSION"
+        working-directory: ${{ env.WORKSPACE }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qust-macos
+          path: dist/*
           if-no-files-found: error
 
   publish:
-    needs: [release, build]
+    needs: [release, windows, macos]
     if: needs.release.outputs.id
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - run: gh release edit "v${{ needs.release.outputs.version }}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # latest.json lists each file under both updaters' platform keys, with its signature.
+      - run: |
+          node packaging/latest-json.mjs --version "$VERSION" \
+            --windows "dist/Qust_${VERSION}_x64-setup.exe" \
+            --macos "dist/Qust_${VERSION}_universal.app.tar.gz" \
+            --out dist/latest.json
+
+      - run: |
+          gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
+            "dist/Qust_${VERSION}_x64-setup.exe" "dist/Qust_${VERSION}_x64-setup.exe.sig" \
+            "dist/Qust_${VERSION}_universal.dmg" \
+            "dist/Qust_${VERSION}_universal.app.tar.gz" "dist/Qust_${VERSION}_universal.app.tar.gz.sig" \
+            dist/latest.json
+          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -8,16 +8,21 @@
 //! Every value has its text as tooltip (`title`), so a truncated one can be read; right-clicking
 //! a value (`dd`) selects all of it and offers Copy (bridge.js). The page let the mouse select
 //! part of a value too; here a value is selected whole (see the crate docs).
+//!
+//! The texts come from the stream and can be in any script: what the window draws is
+//! `qust_text::shown` of each (right-to-left text in the order GPUI needs), computed when the
+//! texts change; tooltips, Copy and accessibility labels keep the logical text.
 
 use crate::format::{bytes, duration, format_from_content_type, js_number, locale_en, present, to_fixed, truthy};
-use crate::local::{kerning, scroll_body, selection_colors, spaced_line, tabular_kerning, truncated_line, LineStyle};
 use crate::services::PanelServices;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    div, px, AnyElement, FontWeight, Role, App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render,
+    div, px, AnyElement, Role, App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render,
     ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Subscription, Task, Window,
 };
-use qust_fluent::section::{info_card, info_label, state_badge};
+use qust_fluent::scrollbar::scroll_area;
+use qust_fluent::section::{info_card, info_heading, info_label, info_value_line, state_badge};
+use qust_fluent::text::{line, selection_colors};
 use qust_fluent::{theme, TextStyles, TooltipExt};
 use qust_shell::menu::{copy_menu, Position};
 use qust_ui::{format, Models, Playback, Status, StreamInfo, WindowRoot};
@@ -71,6 +76,17 @@ impl InfoTexts {
     pub fn value(&self, id: &str) -> &str {
         VALUES.iter().position(|v| *v == id).and_then(|i| self.values.get(i)).map_or("—", String::as_str)
     }
+
+    /// What the window draws for these texts: each through `qust_text::shown`.
+    pub fn shown(&self) -> InfoTexts {
+        InfoTexts {
+            station: qust_text::shown(&self.station),
+            title: qust_text::shown(&self.title),
+            state: self.state.clone(),
+            playing: self.playing,
+            values: self.values.iter().map(qust_text::shown).collect(),
+        }
+    }
 }
 
 /// `set(id, value)`: empty, null and undefined show an em dash.
@@ -117,7 +133,8 @@ pub fn texts(status: &Status, info: &StreamInfo) -> InfoTexts {
             "stalls" => active.then(|| js_number(status.stalls as f64)),
             "reconnects" => details.reconnects.map(js_number),
             "titleChanges" => details.title_changes.map(js_number),
-            "host" => status.url.as_deref().filter(|_| active).map(format::host),
+            // `host(url)` in info.js: null (an em dash) where `new URL` throws.
+            "host" => status.url.as_deref().filter(|_| active).and_then(format::url_host),
             "icyName" => details.name.clone(),
             "icyTitle" => details.title.clone(),
             "icyGenre" => details.genre.clone(),
@@ -149,18 +166,14 @@ pub fn texts(status: &Status, info: &StreamInfo) -> InfoTexts {
     }
 }
 
-/// `.info-card h2`: semibold 11/16, uppercase, letter-spacing 0.06 em, accent, 8 px below.
-/// (`qust_fluent::section::info_heading` with exact letter-spacing: see `local::spaced_line`.)
-fn heading(text: &str, theme: &qust_fluent::Theme) -> gpui::Div {
-    div().mb(px(8.0)).child(spaced_line(text.to_uppercase(), 11.0, 16.0, gpui::FontWeight::SEMIBOLD, 11.0 * 0.06, theme.accent))
-}
-
 pub struct InfoView {
     models: Models,
     services: Rc<dyn PanelServices>,
     status: Status,
     info: StreamInfo,
     texts: InfoTexts,
+    /// `texts` as drawn (`InfoTexts::shown`).
+    shown: InfoTexts,
     ticker: Option<Task<()>>,
     // Requests sent and the newest one whose answer was applied (older answers are dropped).
     requested: u64,
@@ -188,6 +201,7 @@ impl InfoView {
             status: Status::default(),
             info: StreamInfo::default(),
             texts: texts(&Status::default(), &StreamInfo::default()),
+            shown: InfoTexts::default(),
             ticker: None,
             requested: 0,
             applied: 0,
@@ -203,6 +217,7 @@ impl InfoView {
         // model current from the start, so it is the same).
         view.status = models.status.read(cx).status.clone();
         view.texts = texts(&view.status, &view.info);
+        view.shown = view.texts.shown();
         view.poll(cx);
         view.update_ticker(cx);
         view
@@ -291,6 +306,7 @@ impl InfoView {
                     self.selected = None;
                 }
             }
+            self.shown = next.shown();
             self.texts = next;
             cx.notify();
         }
@@ -332,19 +348,10 @@ impl InfoView {
         let selected = self.selected == Some(id);
         // `.info-card dd`: semibold 15/20 tabular, 7 px below unless last; 13/20 regular in the
         // ICY pairs. One line, cut with an ellipsis as Chromium cuts it.
-        let style = LineStyle {
-            display: false,
-            weight: if pairs { FontWeight::NORMAL } else { FontWeight::SEMIBOLD },
-            features: tabular_kerning(),
-            size: if pairs { 13.0 } else { 15.0 },
-            line: 20.0,
-            color: theme.text,
-            highlight: selected.then(selection_colors),
-        };
         div()
             .w_full()
             .when(!pairs && !last, |d| d.mb(px(7.0)))
-            .child(truncated_line(text.clone(), style))
+            .child(info_value_line(self.shown.value(id).to_string(), pairs, selected.then(selection_colors), &theme))
             .id(id)
             .role(Role::Label)
             .aria_label(text.clone())
@@ -365,6 +372,7 @@ impl Render for InfoView {
         self.renders += 1;
         let theme = *theme(cx);
         let t = self.texts.clone();
+        let shown = self.shown.clone();
         let head = div()
             .flex()
             .flex_row()
@@ -377,12 +385,14 @@ impl Render for InfoView {
                     .flex_1()
                     .min_w_0()
                     .font_text()
-                    .child(div().id("station").type_size(12.0, 16.0).text_color(theme.text_2).native_tooltip(t.station.clone()).child(t.station.clone()))
+                    .child(div().id("station").type_size(12.0, 16.0).text_color(theme.text_2).whitespace_nowrap().native_tooltip(t.station.clone()).child(shown.station.clone()))
                     .child(
-                        div().id("title").role(Role::Label).aria_label(t.title.clone()).native_tooltip(t.title.clone()).child(truncated_line(
-                            t.title.clone(),
-                            LineStyle { display: true, weight: FontWeight::SEMIBOLD, features: kerning(), size: 18.0, line: 24.0, color: theme.text, highlight: None },
-                        )),
+                        div()
+                            .id("title")
+                            .role(Role::Label)
+                            .aria_label(t.title.clone())
+                            .native_tooltip(t.title.clone())
+                            .child(line(shown.title.clone()).ellipsis().w_full().font_display().semibold().type_size(18.0, 24.0).text_color(theme.text)),
                     ),
             )
             .child(state_badge(t.state.clone(), t.playing, &theme).flex_none().id("state").native_tooltip(t.state.clone()));
@@ -391,19 +401,19 @@ impl Render for InfoView {
             for (i, (label, id)) in rows.iter().enumerate() {
                 dl = dl.child(info_label(*label, false, &theme)).child(self.value(id, false, i == rows.len() - 1, cx));
             }
-            info_card(&theme).flex_1().min_w_0().child(heading(title, &theme)).child(dl)
+            info_card(&theme).flex_1().min_w_0().child(info_heading(title, &theme)).child(dl)
         }));
         let pairs = div().flex().flex_col().gap(px(5.0)).children(PAIRS.iter().map(|(label, id)| {
             div().flex().flex_row().gap(px(12.0)).child(info_label(*label, true, &theme).w(px(130.0)).flex_none()).child(div().flex_1().min_w_0().child(self.value(id, true, true, cx)))
         }));
-        let icy = info_card(&theme).child(heading("ICY metadata", &theme)).child(pairs);
+        let icy = info_card(&theme).child(info_heading("ICY metadata", &theme)).child(pairs);
         let content = div().flex().flex_col().gap(px(10.0)).pt(px(14.0)).px(px(20.0)).pb(px(20.0)).child(head).child(cards).child(icy);
         let this = cx.entity().downgrade();
         div()
             .id("info-window")
             .size_full()
-            // Kerning for every text inside (inherited; see `local::kerning`).
-            .font_features(kerning())
+            // The page's font (kerning on) for every text inside.
+            .font_text()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
             .on_mouse_down(
@@ -414,7 +424,7 @@ impl Render for InfoView {
                     }
                 }),
             )
-            .child(scroll_body("info-body", &self.scroll, self.overflow, content, move |over, cx| {
+            .child(scroll_area("info-body", &self.scroll, self.overflow, content, move |over, cx| {
                 let _ = this.update(cx, |view, cx| {
                     view.overflow = over;
                     cx.notify();

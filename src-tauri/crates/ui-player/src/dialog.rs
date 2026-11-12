@@ -14,7 +14,7 @@ use gpui::{
 use gpui_component::input::InputState;
 use qust_fluent::dialog::{backdrop, dialog_body, dialog_error, dialog_footer, dialog_title, field};
 use qust_fluent::focus::FocusCycle;
-use qust_fluent::{input_state, Button, DialogCard, TextBox};
+use qust_fluent::{input_state, Button, DialogCard, TextBox, TextStyles};
 use qust_shell::menu::{edit_menu, EditCommand};
 use std::rc::Rc;
 use std::time::Instant;
@@ -399,7 +399,7 @@ impl Render for DialogView {
             .child(dialog_title(form.title.clone(), cx))
             .child(field(form.name_label.clone(), name_box, cx))
             .child(field(form.url_label.clone(), url_box, cx))
-            .when_some(self.error.clone(), |body, error| body.child(dialog_error(error, cx)));
+            .when_some(self.error.clone(), |body, error| body.child(dialog_error(crate::text::shown(&error), cx)));
 
         let submit = this.clone();
         let eject = this.clone();
@@ -457,7 +457,7 @@ impl Render for DialogView {
             .child(DialogCard::new("dialog", self.opened_at, form.title.clone()).child(body).child(footer));
         let _ = window;
         backdrop(cx)
-            .font_features(crate::text::kerning())
+            .font_text()
             // Right-clicks inside the dialog show no player menu (text boxes have their own).
             .on_mouse_up(gpui::MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .child(cycle.trap(card))

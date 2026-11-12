@@ -1,0 +1,92 @@
+--- a/src/direct_write.rs
++++ b/src/direct_write.rs
+@@ -476,6 +476,8 @@
+         Ok(layout)
+     }
+ 
++    // QUST PATCH: the runs `DrawGlyphRun` collects are sorted by their position on the line
++    // before they are returned (see the comment on `DrawGlyphRun`). Re-apply when bumping GPUI.
+     fn layout_line_without_separators(
+         &mut self,
+         components: &DirectWriteComponents,
+@@ -588,6 +590,12 @@
+                 0.0,
+             )?;
+             let width = px(renderer_context.width);
++            // Runs in the order they sit on the line (DirectWrite may report a right-to-left
++            // run's pieces in logical order).
++            runs.sort_by(|a, b| {
++                let left = |run: &ShapedRun| run.glyphs.first().map_or(f32::MAX, |g| g.position.x.as_f32());
++                left(a).total_cmp(&left(b))
++            });
+ 
+             Ok(LineLayout {
+                 font_size,
+@@ -1287,10 +1295,18 @@
+ 
+ #[allow(non_snake_case)]
+ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
++    // QUST PATCH (vendor/gpui-pre-windows.patch, see src-tauri/Cargo.toml [patch.crates-io]):
++    // upstream 0.3.12 ignores `baselineoriginx` and the run's bidi level and lays every run's
++    // glyphs left to right from the running width, so right-to-left text (Arabic, Hebrew titles,
++    // typed into a text box) comes out mirrored. Here each glyph is placed from the run's origin,
++    // leftwards for an odd bidi level, and the run's glyphs are then stored left to right; the
++    // line's runs are sorted by position in `layout_line_without_separators`. Left-to-right text
++    // is placed exactly as before. Re-apply this whenever gpui-pre-windows is bumped (or drop it
++    // once upstream handles bidi runs).
+     fn DrawGlyphRun(
+         &self,
+         clientdrawingcontext: *const ::core::ffi::c_void,
+-        _baselineoriginx: f32,
++        baselineoriginx: f32,
+         _baselineoriginy: f32,
+         _measuringmode: DWRITE_MEASURING_MODE,
+         glyphrun: *const DWRITE_GLYPH_RUN,
+@@ -1420,6 +1436,11 @@
+                 )?
+             };
+ 
++            // The run's origin is where DirectWrite placed it on the line: its left edge for a
++            // left-to-right run, its right edge for a right-to-left one (odd bidi level), whose
++            // glyphs, in logical order, advance leftwards and whose offsets point leftwards.
++            let right_to_left = glyphrun.bidiLevel % 2 == 1;
++            let mut pen = baselineoriginx;
+             let cluster_analyzer = ClusterAnalyzer::new(cluster_map, glyph_count);
+             let mut utf16_idx = desc.textPosition as usize;
+             let mut glyph_idx = 0;
+@@ -1436,19 +1457,30 @@
+                     let is_emoji =
+                         color_font && is_color_glyph(font_face, id, &context.components.factory);
+                     let this_glyph_idx = glyph_idx + cluster_glyph_idx;
++                    let advance = glyph_advances[this_glyph_idx];
++                    let offset = glyph_offsets[this_glyph_idx];
++                    let x = if right_to_left {
++                        pen -= advance;
++                        pen - offset.advanceOffset
++                    } else {
++                        let x = pen + offset.advanceOffset;
++                        pen += advance;
++                        x
++                    };
+                     glyphs.push(ShapedGlyph {
+                         id,
+-                        position: point(
+-                            px(context.width + glyph_offsets[this_glyph_idx].advanceOffset),
+-                            px(-glyph_offsets[this_glyph_idx].ascenderOffset),
+-                        ),
++                        position: point(px(x), px(-offset.ascenderOffset)),
+                         index: context.index_converter.utf8_ix,
+                         is_emoji,
+                     });
+-                    context.width += glyph_advances[this_glyph_idx];
++                    context.width += advance;
+                 }
+                 glyph_idx += cluster_glyph_count;
+             }
++            // Left to right on the line, like every other run.
++            if right_to_left {
++                glyphs.reverse();
++            }
+             context.runs.push(ShapedRun { font_id, glyphs });
+         }
+         Ok(())

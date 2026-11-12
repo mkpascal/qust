@@ -818,17 +818,17 @@ fn tab_order(cx: &mut AsyncApp) -> LocalBoxFuture<'_, Result<(), String>> {
         for (i, name) in ["playlist", "add file", "add url"].into_iter().enumerate() {
             expected.push((name, deck[i].clone()));
         }
-        // With nothing focused, Tab goes to the first control (as from the page's body).
+        // With nothing focused, Tab goes to the first control (as from the page's body): the window
+        // root holds the focus then and starts Tab from the beginning.
         rig.key("tab");
-        let first = rig.focused(&expected[0].1);
-        if !first {
-            println!("note  tab_order: Tab with nothing focused focuses nothing (GPUI dispatches no action without a focused element)");
-            // Start from the volume slider instead: Shift+Tab reaches the seek bar.
-            let volume = expected[1].1.clone();
-            rig.with_window(|_, window, cx| volume.focus(window, cx));
-            rig.key("shift-tab");
-            check!(rig.focused(&expected[0].1), "Shift+Tab from volume reaches the seek bar");
+        if !rig.focused(&expected[0].1) {
+            let actual: Vec<&str> = expected.iter().filter(|(_, h)| rig.focused(h)).map(|(n, _)| *n).collect();
+            return Err(format!("the first Tab on a fresh window: expected the seek bar, focused {actual:?}"));
         }
+        // Shift+Tab from the first control wraps to the last one, and Tab comes back.
+        rig.key("shift-tab");
+        rig.key("tab");
+        check!(rig.focused(&expected[0].1), "Shift+Tab then Tab comes back to the seek bar");
         check!(rig.focus_visible(&expected[0].1), "the seek bar has no ring");
         for (step, (name, handle)) in expected.iter().enumerate().skip(1) {
             rig.key("tab");

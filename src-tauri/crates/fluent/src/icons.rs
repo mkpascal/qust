@@ -4,11 +4,28 @@
 //! what `fill: currentColor` did). The Settings page has its own chevron (stroke 1.2 instead of
 //! 1.3) and info icon (r 5.8 instead of 6.2): they are separate icons here.
 //!
-//! The app registers [`Assets`] (`Application::with_assets(qust_fluent::Assets)`), and an icon is
-//! drawn with [`icon`]`(Icon::Play, 16.)`, colored by `text_color`.
+//! An icon is drawn with [`icon`]`(Icon::Play, 16.)`, colored by `text_color` (or the inherited
+//! text color, hover and pressed styles included).
+//!
+//! **Rasterized as Chromium does.** GPUI's `svg()` rasterizes at twice the size, scales the mask
+//! down while drawing it (through its text shader's contrast and gamma adjustment), at a
+//! position rounded toward zero: half-pixel edges come out soft or shifted (the pause bars, the
+//! gear). Chromium's Skia rasterizes an inline SVG's paths once, at the device resolution, with
+//! analytic (exact-area) coverage, from its box's origin snapped to a device pixel, and blends
+//! that coverage as it is. [`icon`] does the same: resvg (tiny-skia, the rasterizer GPUI itself
+//! uses) at 8 × 8 samples per device pixel, box-filtered down to the exact area covered, from
+//! the snapped origin, drawn as an image pixel for pixel ([`paint_icon`]; kept per icon, device
+//! size, rotation and color). Measured on the reference renders (playing, stopped, paused,
+//! empty), the pixels that differ around icons drop from 614–737 per capture to 109–171 in dark
+//! and from 278–371 to 125–186 in light; tiny-skia at 1 × (its own antialiasing) gave 263–384.
+//!
+//! [`Assets`] still serves the symbols as SVG files (`Application::with_assets`) for anything
+//! that wants GPUI's own `svg()`.
 
-use gpui::{px, svg, AssetSource, SharedString, Styled, Svg};
+use gpui::{canvas, div, point, px, AssetSource, Bounds, Corners, Div, Hsla, ParentElement, Pixels, RenderImage, SharedString, Styled, Window};
 use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Icon {
@@ -192,9 +209,108 @@ impl Icon {
 }
 
 /// An icon at `size` CSS px (the page's `svg { width: 16px; height: 16px }`, or the class's
-/// size), drawn in the current text color unless `text_color` is set on it.
-pub fn icon(icon: Icon, size: f32) -> Svg {
-    svg().path(icon.path()).size(px(size)).flex_none()
+/// size), drawn in the current text color unless `text_color` is set on it (see the module
+/// docs). A box like the page's `<svg>`: give it margins, hover colors, opacity like a div.
+pub fn icon(icon: Icon, size: f32) -> Div {
+    rotated_icon(icon, size, 0.0)
+}
+
+/// [`icon`] turned by `radians` about its centre (CSS `transform: rotate()`: the Playlist
+/// button's chevron).
+pub fn rotated_icon(icon: Icon, size: f32, radians: f32) -> Div {
+    div().flex_none().size(px(size)).child(canvas(|_, _, _| {}, move |bounds, _, window, _| paint_icon_rotated(icon, size, radians, bounds, window)).size_full())
+}
+
+/// How many rasterized icons are kept (icons × sizes × colors in use; each is a few hundred
+/// bytes in GPUI's sprite atlas, which keeps one per image).
+const KEPT: usize = 512;
+
+type IconKey = (Icon, u32, u32, i32, [u8; 4]);
+
+fn rasterized() -> &'static Mutex<HashMap<IconKey, Arc<RenderImage>>> {
+    static CACHE: OnceLock<Mutex<HashMap<IconKey, Arc<RenderImage>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Samples per device pixel along each axis: the exact covered area, as Skia's analytic
+/// antialiasing computes it, to within 1/64.
+const SUPERSAMPLE: u32 = 8;
+
+/// The icon's coverage at `scale` × its 16-unit view box, in a `side` × `side` device-pixel
+/// image (see the module docs), turned by `radians` about its centre.
+pub fn rasterize(icon: Icon, side: u32, scale: f32, radians: f32) -> Option<Vec<u8>> {
+    let tree = resvg::usvg::Tree::from_data(icon.svg().as_bytes(), &resvg::usvg::Options::default()).ok()?;
+    let side = side.max(1);
+    let n = SUPERSAMPLE;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(side * n, side * n)?;
+    let k = scale * n as f32;
+    let transform = resvg::tiny_skia::Transform::from_scale(k, k);
+    let transform = if radians != 0.0 { resvg::tiny_skia::Transform::from_rotate_at(radians.to_degrees(), 8.0 * k, 8.0 * k).pre_concat(transform) } else { transform };
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+    let pixels = pixmap.pixels();
+    let stride = (side * n) as usize;
+    let mut coverage = Vec::with_capacity((side * side) as usize);
+    for y in 0..side as usize {
+        for x in 0..side as usize {
+            let mut sum = 0u32;
+            for dy in 0..n as usize {
+                let row = (y * n as usize + dy) * stride + x * n as usize;
+                sum += pixels[row..row + n as usize].iter().map(|p| p.alpha() as u32).sum::<u32>();
+            }
+            coverage.push(((sum + n * n / 2) / (n * n)) as u8);
+        }
+    }
+    Some(coverage)
+}
+
+fn image_for(icon: Icon, size: f32, scale: f32, radians: f32, color: Hsla) -> Option<Arc<RenderImage>> {
+    let side = (size * scale).ceil() as u32;
+    let rgba = gpui::Rgba::from(color);
+    let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let key = (icon, side, (size * scale * 100.0).round() as u32, (radians * 1000.0).round() as i32, [channel(rgba.r), channel(rgba.g), channel(rgba.b), channel(rgba.a)]);
+    let mut cache = rasterized().lock().ok()?;
+    if let Some(image) = cache.get(&key) {
+        return Some(image.clone());
+    }
+    let coverage = rasterize(icon, side, size * scale / 16.0, radians)?;
+    // GPUI's images are BGRA with straight alpha.
+    let [r, g, b, a] = key.4;
+    let mut bytes = Vec::with_capacity(coverage.len() * 4);
+    for c in coverage {
+        bytes.extend_from_slice(&[b, g, r, ((c as u32 * a as u32 + 127) / 255) as u8]);
+    }
+    let buffer = image::RgbaImage::from_raw(side.max(1), side.max(1), bytes)?;
+    let image = Arc::new(RenderImage::new(smallvec_frame(buffer)));
+    if cache.len() >= KEPT {
+        cache.clear();
+    }
+    cache.insert(key, image.clone());
+    Some(image)
+}
+
+fn smallvec_frame(buffer: image::RgbaImage) -> Vec<image::Frame> {
+    vec![image::Frame::new(buffer)]
+}
+
+/// Paints `icon` at `size` CSS px in the box `bounds`, in the current text color, from the box's
+/// origin snapped to a device pixel (halves up, as Chromium snaps).
+pub fn paint_icon(icon: Icon, size: f32, bounds: Bounds<Pixels>, window: &mut Window) {
+    paint_icon_rotated(icon, size, 0.0, bounds, window)
+}
+
+/// [`paint_icon`] turned by `radians` about the icon's centre.
+pub fn paint_icon_rotated(icon: Icon, size: f32, radians: f32, bounds: Bounds<Pixels>, window: &mut Window) {
+    let color = window.text_style().color;
+    if color.a <= 0.0 {
+        return;
+    }
+    let scale = window.scale_factor();
+    let Some(image) = image_for(icon, size, scale, radians, color) else { return };
+    let side = (size * scale).ceil();
+    let x = (bounds.origin.x.as_f32() * scale + 0.5).floor() / scale;
+    let y = (bounds.origin.y.as_f32() * scale + 0.5).floor() / scale;
+    let at = Bounds::new(point(px(x), px(y)), gpui::size(px(side / scale), px(side / scale)));
+    let _ = window.paint_image(at, at, Corners::default(), image, 0, false);
 }
 
 /// The icons as a GPUI asset source.
@@ -213,6 +329,19 @@ impl AssetSource for Assets {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The exact area covered, as Skia's analytic antialiasing: the pause bars' edges at x 3.5
+    // and 6.5 cover half a pixel column each.
+    #[test]
+    fn rasterized_by_covered_area() {
+        let coverage = rasterize(Icon::Pause, 16, 1.0, 0.0).expect("pause");
+        let at = |x: usize, y: usize| coverage[y * 16 + x];
+        assert_eq!(at(2, 8), 0);
+        assert!((at(3, 8) as i32 - 128).abs() <= 2, "{}", at(3, 8));
+        assert_eq!(at(4, 8), 255);
+        assert!((at(6, 8) as i32 - 128).abs() <= 2, "{}", at(6, 8));
+        assert_eq!(at(7, 8), 0);
+    }
 
     // Every symbol of the pages is here, with the page's markup.
     #[test]

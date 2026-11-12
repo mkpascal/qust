@@ -44,6 +44,8 @@ fn main() {
                 i += 1;
                 themes = args.get(i).map(|t| t.split(',').map(str::to_string).collect()).unwrap_or(themes);
             }
+            // Compare with reference/renders-gray (grayscale text, as the real window drew most).
+            "--gray" => std::env::set_var("QUST_REFERENCE_SET", "renders-gray"),
             "--out" => {
                 i += 1;
                 if let Some(dir) = args.get(i) {

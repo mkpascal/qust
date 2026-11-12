@@ -46,6 +46,8 @@ fn main() {
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            // Compare with reference/renders-gray (grayscale text, as the real window drew most).
+            "--gray" => std::env::set_var("QUST_REFERENCE_SET", "renders-gray"),
             "--out" => {
                 i += 1;
                 out = PathBuf::from(&args[i]);

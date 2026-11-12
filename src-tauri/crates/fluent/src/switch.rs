@@ -5,13 +5,17 @@
 //! 20 px. Hovering anywhere on the toggle (label included): thumb 14 px at top 2 and, checked,
 //! moved 18 px. `transform 0.15s cubic-bezier(0.1, 0.9, 0.2, 1), width 0.1s ease` (the height
 //! and top jump). A click anywhere on it or Space when focused toggles; the focus ring is drawn
-//! on the track. Disabled (`.setting.is-disabled`): label and track at opacity 0.45, inert.
+//! on the track. Disabled (`.setting.is-disabled .toggle`): label and track at opacity 0.45 as a
+//! group (the thumb doesn't let the track show through: [`crate::paint::Fade`], over the setting
+//! card it always sits on), neither focusable nor clickable, but the thumb still grows under
+//! the pointer: the page's label kept its `:hover`.
 
 use crate::focus::is_focus_visible;
+use crate::paint::Fade;
 use crate::motion::{motion, timing, Transition, EASE, FLUENT};
 use crate::state::Forced;
 use crate::surface::focus_ring;
-use crate::text::TextStyles;
+use crate::text::{line, TextStyles};
 use crate::theme::theme;
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -75,7 +79,7 @@ impl RenderOnce for Switch {
             translate: Transition::new(if checked { 20.0 } else { 0.0 }, timing::TOGGLE_THUMB, FLUENT),
             width: Transition::new(12.0, timing::TOGGLE_WIDTH, EASE),
         });
-        let hover = !self.disabled && (self.forced.hover || memory.read(cx).hovered);
+        let hover = self.forced.hover || memory.read(cx).hovered;
         let (translate, width, running) = memory.update(cx, |m, _| {
             m.translate.set(match (checked, hover) {
                 (true, true) => 18.0,
@@ -89,6 +93,9 @@ impl RenderOnce for Switch {
             window.request_animation_frame();
         }
         let (track_fill, track_border, thumb) = if checked { (theme.accent, theme.accent, theme.on_accent) } else { (theme.control, theme.text_2, theme.text_2) };
+        let fade = self.disabled.then(|| Fade::new(0.45, theme.card.over(theme.bg)));
+        let label_color = Fade::layer(fade, theme.text);
+        let (track_fill, track_border, thumb) = (Fade::layer(fade, track_fill), Fade::layer(fade, track_border), Fade::on(fade, thumb, track_fill));
         // `top: 3px` and `height: 12px`, or 2 and 14 while hovered (they jump; only the width
         // transitions). Absolute positions start inside the 1 px border, as in CSS.
         let (top, height) = if hover { (2.0, 14.0) } else { (3.0, 12.0) };
@@ -114,14 +121,13 @@ impl RenderOnce for Switch {
             .gap(px(12.0))
             .font_text()
             .type_size(14.0, 20.0)
-            .text_color(theme.text)
-            .when(self.disabled, |r| r.opacity(0.45))
+            .text_color(label_color)
             .role(Role::Switch)
             .aria_label(self.label.clone())
             .aria_toggled(if checked { Toggled::True } else { Toggled::False })
-            .child(div().child(if checked { "On" } else { "Off" }))
+            .child(line(if checked { "On" } else { "Off" }))
             .child(track);
-        if interactive {
+        {
             let memory = memory.clone();
             root = root.on_hover(move |hovered, _, cx| {
                 memory.update(cx, |m, cx| {
@@ -129,6 +135,8 @@ impl RenderOnce for Switch {
                     cx.notify();
                 })
             });
+        }
+        if interactive {
             if let Some(handle) = &self.focus {
                 root = root.track_focus(handle);
             }

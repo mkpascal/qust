@@ -5,7 +5,9 @@
 //! Row: 26 tall, radius 4, padding 0 10 0 4, gap 10, 13/18. Hover `--subtle-hover`; selected
 //! `--row-selected` (hovered: `--row-selected-hover`) with Fluent's pill: 3 × 12 accent at the
 //! left edge (top/bottom 7), radius 2. Number column 34 px, right-aligned, 12 px `--text-3`
-//! tabular (cartridge rows: a 14 px icon in `--text-2`). Title: flex, one line, ellipsis.
+//! tabular (cartridge rows: a 14 px icon in `--text-2`, even on the active row:
+//! `.row.is-cartridge .row-number` comes after `.row.is-active .row-number` in style.css).
+//! Title: flex, one line, ellipsis.
 //! Detail: 12 px `--text-3` tabular, at most 40 % of the row, ellipsis. Active (the active
 //! cartridge or entry): title and number in accent, semibold. Missing: title `--text-disabled`,
 //! struck through. Playing: the number is replaced by the accent equalizer (10 px tall, margin
@@ -16,7 +18,7 @@
 //! (Chromium keeps the row under the pointer highlighted). Forced hover (captures) is exact.
 
 use crate::state::Forced;
-use crate::text::TextStyles;
+use crate::text::{line, strikethrough, TextStyles};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::{div, px, relative, Div, ElementId, InteractiveElement, ParentElement, SharedString, Stateful, Styled};
@@ -65,7 +67,7 @@ pub fn drop_line(after: bool, theme: &Theme) -> Div {
 /// `.row-number`: 34 px, right-aligned; put the index text, the cartridge icon or the
 /// equalizer in it.
 pub fn row_number(active: bool, cartridge: bool, theme: &Theme) -> Div {
-    let color = if active { theme.accent } else if cartridge { theme.text_2 } else { theme.text_3 };
+    let color = if cartridge { theme.text_2 } else if active { theme.accent } else { theme.text_3 };
     div()
         .flex()
         .flex_none()
@@ -78,33 +80,23 @@ pub fn row_number(active: bool, cartridge: bool, theme: &Theme) -> Div {
         .when(active, |d| d.semibold())
 }
 
-/// `.row-title`.
+/// `.row-title`: one line cut with Chromium's ellipsis, on Chromium's baseline.
 pub fn row_title(text: impl Into<SharedString>, active: bool, missing: bool, theme: &Theme) -> Div {
     let color = if missing { theme.text_disabled } else if active { theme.accent } else { theme.text };
-    div()
-        .flex_1()
-        .min_w_0()
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .text_ellipsis()
-        .text_color(color)
-        .when(active, |d| d.semibold())
-        .when(missing, |d| d.line_through())
-        .child(text.into())
+    let mut title = line(text).ellipsis().w_full().text_color(color);
+    if active {
+        title = title.semibold();
+    }
+    if missing {
+        title.text_style().strikethrough = Some(strikethrough(color));
+    }
+    div().flex_1().min_w_0().h(px(18.0)).child(title)
 }
 
-/// `.row-detail`.
-pub fn row_detail(text: impl Into<SharedString>, theme: &Theme) -> Div {
-    div()
-        .flex_none()
-        .max_w(relative(0.4))
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .text_ellipsis()
-        .text_size(px(12.0))
-        .tabular_nums()
-        .text_color(theme.text_3)
-        .child(text.into())
+/// `.row-detail`: as wide as its text (a fractional width, as Chromium's box), at most 40 % of
+/// the row's content box, cut with Chromium's ellipsis.
+pub fn row_detail(text: impl Into<SharedString>, theme: &Theme) -> crate::text::Line {
+    line(text).ellipsis().flex_none().max_w(relative(0.4)).text_size(px(12.0)).tabular_nums().text_color(theme.text_3)
 }
 
 /// `.playlist-divider`: 1 px `--card-stroke` with a 1 px `--card-edge` line under it

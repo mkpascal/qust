@@ -15,9 +15,15 @@
 //!
 //! A slot records where it was laid out; when that changes (a resize, a scale change) the
 //! root redraws once more with the layer at the new place.
+//!
+//! **Focus.** In the browser a fresh window (or one whose focused control went away) has the
+//! document focused, and the first Tab moves to the first control. In GPUI nothing is focused
+//! then, and a key event only reaches the root node of the dispatch tree, which has no Tab
+//! handler: the root takes the focus itself whenever nothing has it (its handle is not a tab
+//! stop), so Tab and Shift+Tab start from the beginning and the end, as in the browser.
 
 use gpui::{
-    canvas, div, px, AnyView, App, AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement, ParentElement, Pixels, Render,
+    canvas, div, px, AnyView, App, AppContext, Bounds, Context, Entity, FocusHandle, InteractiveElement, IntoElement, ParentElement, Pixels, Render,
     SharedString, StyleRefinement, Styled, WeakEntity, Window,
 };
 use qust_fluent::theme;
@@ -32,13 +38,15 @@ pub struct WindowRoot {
     content: AnyView,
     live: Vec<Live>,
     overlays: Vec<(SharedString, AnyView)>,
+    /// Focused whenever nothing else is (see the module docs).
+    focus: Option<FocusHandle>,
     /// Renders of this root (measurements and tests).
     pub renders: u64,
 }
 
 impl WindowRoot {
     pub fn new(content: impl Into<AnyView>) -> WindowRoot {
-        WindowRoot { content: content.into(), live: Vec::new(), overlays: Vec::new(), renders: 0 }
+        WindowRoot { content: content.into(), live: Vec::new(), overlays: Vec::new(), focus: None, renders: 0 }
     }
 
     pub fn content(&self) -> &AnyView {
@@ -102,12 +110,35 @@ impl WindowRoot {
 }
 
 impl Render for WindowRoot {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.renders += 1;
+        let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
+        if window.focused(cx).is_none() {
+            let root = focus.clone();
+            window.defer(cx, move |window, cx| {
+                if window.focused(cx).is_none() {
+                    root.focus(window, cx);
+                }
+            });
+        }
         let theme = theme(cx);
+        // Tab from the root itself starts at the first tab stop, Shift+Tab at the last (the root
+        // isn't one, and GPUI would go on from where its handle sorts).
+        let (next, prev) = (focus.clone(), focus.clone());
         qust_fluent::focus::tab_navigation(
             div()
                 .id("window-root")
+                .track_focus(&focus)
+                .capture_action(move |_: &qust_fluent::focus::FocusNext, window, cx| {
+                    if next.is_focused(window) {
+                        window.blur(cx);
+                    }
+                })
+                .capture_action(move |_: &qust_fluent::focus::FocusPrev, window, cx| {
+                    if prev.is_focused(window) {
+                        window.blur(cx);
+                    }
+                })
                 .relative()
                 .size_full()
                 .bg(theme.bg)

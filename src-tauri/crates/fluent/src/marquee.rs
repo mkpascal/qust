@@ -18,7 +18,7 @@
 use crate::color::Color;
 use crate::motion::{marquee_offset, marquee_still_for, motion};
 use crate::paint::bounds_probe;
-use crate::text::{TextStyles, FONT_TEXT};
+use crate::text::TextStyles;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     div, linear_color_stop, linear_gradient, px, Context, Font, FontWeight, IntoElement, ParentElement, Render, SharedString, Styled, TextRun, Window,
@@ -89,7 +89,7 @@ impl Marquee {
     }
 
     fn font(&self) -> Font {
-        Font { weight: if self.dim { FontWeight::NORMAL } else { FontWeight::SEMIBOLD }, ..gpui::font(FONT_TEXT) }
+        crate::text::font(false, if self.dim { FontWeight::NORMAL } else { FontWeight::SEMIBOLD }, crate::text::kerning())
     }
 }
 
@@ -149,7 +149,8 @@ impl Render for Marquee {
             .font_weight(if self.dim { FontWeight::NORMAL } else { FontWeight::SEMIBOLD })
             .text_color(color)
             .child(probe)
-            .child(div().absolute().top_0().left(px(offset)).when(scrolling, |t| t.px(px(6.0))).child(self.text.clone()))
+            // The text on Chromium's baseline, moved by fractions of a pixel as the transform did.
+            .child(div().absolute().top_0().left_0().when(scrolling, |t| t.px(px(6.0))).child(crate::text::line(self.text.clone()).translate_x(offset)))
             // mask-image: linear-gradient(to right, transparent, #000 6px, #000 calc(100% − 12px),
             // transparent). Reduced motion stops the animation but keeps the padding and mask.
             .when(scrolling, |row| {

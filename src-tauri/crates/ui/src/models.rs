@@ -92,6 +92,9 @@ pub struct PlaylistModel {
     /// Bumped on every `player-playlist` (a full rebuild); single-entry changes bump
     /// `entry_versions` for that id only.
     pub version: u64,
+    /// Per entry, the `player-entry` changes since the last rebuild: only ids in `entries` (an
+    /// entry the playlist no longer has is never added), and cleared by every rebuild, so it
+    /// never holds more than the playlist's length (see `apply_entry`).
     pub entry_versions: HashMap<u64, u64>,
 }
 
@@ -273,9 +276,16 @@ impl Models {
             if let Some(slot) = model.entries.iter_mut().find(|e| e.id == entry.id) {
                 if *slot != entry {
                     *slot = entry.clone();
-                    *model.entry_versions.entry(entry.id).or_default() += 1;
+                    let version = model.entry_versions.entry(entry.id).or_default();
+                    *version = version.wrapping_add(1);
                     cx.notify();
                 }
+            }
+            // Bounded by the entries (ids only get in when found above): drop any stale id a
+            // caller might have put there by hand.
+            if model.entry_versions.len() > model.entries.len() {
+                let ids: std::collections::HashSet<u64> = model.entries.iter().map(|e| e.id).collect();
+                model.entry_versions.retain(|id, _| ids.contains(id));
             }
         });
     }

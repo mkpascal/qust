@@ -422,12 +422,7 @@ pub fn status_text(entries: usize, total: f64, selected: usize) -> String {
 
 /// `new URL(url).host`, or the text itself when it isn't a URL (the page's `host()`).
 pub fn host(url: &str) -> String {
-    let host = qust_ui::format::host(url);
-    if host.is_empty() {
-        url.to_string()
-    } else {
-        host
-    }
+    qust_ui::format::host(url)
 }
 
 /// A row's detail: the duration (`formatTime`), else the URL's host for a URL entry, else

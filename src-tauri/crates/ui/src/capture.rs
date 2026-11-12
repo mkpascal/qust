@@ -137,6 +137,27 @@ impl Session {
         self.handle.into()
     }
 
+    /// Waits (up to two seconds) until the window is laid out at `size` (CSS px). The client size
+    /// comes from a resize that Windows applies a moment after the window opens; until then the
+    /// first frames lay out at the system's default size, so early input would go to the wrong
+    /// place. Three readings in a row, 10 ms apart: a late resize can still come after the first.
+    pub async fn wait_for_size(&self, size: (f32, f32), cx: &mut gpui::AsyncApp) {
+        let mut settled = 0;
+        for _ in 0..200 {
+            let now = cx.update(|cx| {
+                self.frames(1, cx);
+                cx.update_window(self.any(), |_, window, _| window.viewport_size()).ok()
+            });
+            let at_size = now.is_some_and(|s| (s.width.as_f32() - size.0).abs() < 0.5 && (s.height.as_f32() - size.1).abs() < 0.5);
+            settled = if at_size { settled + 1 } else { 0 };
+            if settled >= 3 {
+                break;
+            }
+            cx.background_executor().timer(Duration::from_millis(10)).await;
+        }
+        cx.update(|cx| self.frames(2, cx));
+    }
+
     /// Draws a frame now (the window is hidden: nothing draws it otherwise).
     pub fn frame(&self, cx: &mut App) {
         let _ = cx.update_window(self.handle.into(), |_, window, cx| {

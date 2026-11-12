@@ -11,6 +11,12 @@ gpui = { package = "gpui-pre", version = "=0.3.12" }
 # Only for `Input` (the text editing engine inside our own text box frame) and its theme colors.
 gpui-component = "=0.9.1"
 raw-window-handle = "0.6"
+# The icons are rasterized as Chromium rasterizes them (icons.rs): resvg / tiny-skia, the
+# rasterizer GPUI itself uses, at the device resolution; `image` for GPUI's image frames.
+resvg = { version = "0.46", default-features = false }
+image = { version = "0.25", default-features = false }
+# Grapheme boundaries for the ellipsis cut (the same version qust-text uses).
+unicode-segmentation = "1.13"
 
 [target."cfg(windows)".dependencies]
 # The native tooltip control (what WebView2 showed for `title`) and the system accent.

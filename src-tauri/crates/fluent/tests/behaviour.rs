@@ -94,7 +94,7 @@ fn main() {
         })
         .expect("window");
         session.frames(2, cx);
-        let mut check = |name: &str, ok: bool, detail: String| {
+        let check = |name: &str, ok: bool, detail: String| {
             println!("{} {name}: {detail}", if ok { "PASS" } else { "FAIL" });
             if !ok {
                 failures.borrow_mut().push(name.to_string());

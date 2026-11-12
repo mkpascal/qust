@@ -6,11 +6,10 @@
 //! gains or loses a digit (the screen is as wide as the clock or the canvas, whichever is wider).
 
 use crate::view::Shared;
-use gpui::{
-    div, font, prelude::*, px, App, Context, FontWeight, HighlightStyle, IntoElement, Render, StyledText, Window,
-};
+use gpui::{div, prelude::*, px, App, Context, FontWeight, HighlightStyle, IntoElement, Render, Window};
 use qust_fluent::paint::css_inset_shadow;
-use qust_fluent::text::{tabular, FONT_DISPLAY};
+use qust_fluent::section::channel_badge;
+use qust_fluent::text::{font, line, tabular};
 use qust_fluent::{surface, theme, Color, Frame, TextStyles, TooltipExt};
 use qust_ui::{analyzer_slot, format, portal_slot, Playback};
 use std::rc::Rc;
@@ -36,13 +35,13 @@ pub const CLOCK_IDLE: Color = Color::rgba(255, 255, 255, 89.0 / 255.0);
 /// the same advance, so only the pattern ("00:00", "0:00:00") matters.
 pub fn clock_text_width(text: &str, window: &Window) -> f32 {
     let pattern: String = text.chars().map(|c| if c.is_ascii_digit() { '0' } else { c }).collect();
-    let font = gpui::Font { weight: FontWeight::SEMIBOLD, features: tabular(), ..font(FONT_DISPLAY) };
-    let run = gpui::TextRun { len: pattern.len(), font, color: gpui::black(), background_color: None, underline: None, strikethrough: None };
-    window.text_system().shape_line(pattern.into(), px(22.0), &[run], None).width.as_f32()
+    qust_fluent::text::line_width(&pattern, &font(true, FontWeight::SEMIBOLD, tabular()), 22.0, window)
 }
 
 pub struct DisplayView {
     shared: Rc<Shared>,
+    /// The station line as drawn (`crate::text::shown`), for the station it was made from.
+    station: (String, gpui::SharedString),
     /// The clock's text length (its width class), the only thing of the clock this view shows.
     clock_len: usize,
     pub renders: u64,
@@ -62,7 +61,7 @@ impl DisplayView {
         .detach();
         let clock = shared.models.clock.read(cx);
         let clock_len = clock_text(clock.state, clock.seconds).len();
-        DisplayView { shared, clock_len, renders: 0 }
+        DisplayView { shared, clock_len, station: (String::new(), gpui::SharedString::default()), renders: 0 }
     }
 }
 
@@ -71,28 +70,7 @@ fn spec(value: String, unit: &str, cx: &App) -> impl IntoElement {
     let theme = theme(cx);
     let text = format!("{value} {unit}");
     let bold = HighlightStyle { color: Some(theme.text.into()), font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() };
-    div().font_features(crate::text::tabular_kerning()).child(StyledText::new(text).with_highlights([(0..value.len(), bold)]))
-}
-
-/// A MONO / STEREO badge: 9 px uppercase with 0.04 em letter-spacing, 1 px border, radius 3.
-fn channel(label: &str, on: bool, window: &Window, cx: &App) -> impl IntoElement {
-    let theme = theme(cx);
-    let color = if on { theme.accent } else { theme.text_disabled };
-    let border = if on { theme.accent } else { theme.control_stroke };
-    div()
-        .flex()
-        .px(px(4.0))
-        .border_1()
-        .border_color(border)
-        .rounded(px(3.0))
-        .text_color(color)
-        .type_size(9.0, 14.0)
-        .child({
-            let text = label.to_uppercase();
-            let spacing = 9.0 * 0.04;
-            let width = crate::text::spaced_width(&text, 9.0, spacing, window);
-            crate::text::spaced_line(text, 9.0, 14.0, spacing, color).w(px(width))
-        })
+    line(text).tabular_nums().highlight(0..value.len(), bold)
 }
 
 impl Render for DisplayView {
@@ -138,20 +116,28 @@ impl Render for DisplayView {
             _ => "--".to_string(),
         };
         let channels = now.channels.unwrap_or(0.0);
-        // The station line is as wide as the now-playing column: the island's content box less
-        // the screen and the gap. Cut with Chromium's ellipsis.
-        let column = 330.0 - 2.0 - 20.0 - (screen_content + 24.0) - 14.0;
-        let station_font = crate::text::page_font(false, FontWeight::NORMAL, crate::text::kerning());
-        let (station, _) = crate::text::ellipsized(&crate::text::shown(&now.station), &station_font, 11.0, column, window);
+        if self.station.0 != now.station {
+            self.station = (now.station.clone(), crate::text::shown(&now.station));
+        }
+        let station = self.station.1.clone();
+        // The column (58 px of content) is centred against the screen (53 px + the canvas): at
+        // scale 1 that is 5.5 px down, which Chromium paints from 6 (boxes and the text's
+        // baseline round halves up) and GPUI's snapping from 5. The offset is given rounded the
+        // way Chromium rounds it, so everything in the column lands on Chromium's pixels.
+        let (_, canvas_height) = qust_ui::AnalyzerView::css_size(window);
+        let free = (53.0 + canvas_height.as_f32() - 58.0) / 2.0;
+        let column_top = qust_fluent::paint::snap_half_up(free, window.scale_factor());
         let now_playing = div()
             .flex()
             .flex_1()
             .flex_col()
-            .justify_center()
+            .self_start()
+            .mt(px(column_top))
             .gap(px(3.0))
             .min_w_0()
             .font_text()
-            .child(div().type_size(11.0, 14.0).text_color(theme.text_2).whitespace_nowrap().overflow_hidden().child(station))
+            // As wide as the now-playing column, cut with Chromium's ellipsis.
+            .child(line(station).ellipsis().w_full().type_size(11.0, 14.0).text_color(theme.text_2))
             .child(div().w_full().h(px(20.0)).child(portal_slot(root, "title")))
             .child(
                 div()
@@ -164,11 +150,7 @@ impl Render for DisplayView {
                     .whitespace_nowrap()
                     .child(spec(kbps, "kbps", cx))
                     .child(spec(khz, "kHz", cx))
-                    .child(div().flex().gap(px(3.0)).ml_auto()
-                        // The badges' boxes are laid out at y 64.5, which Chromium painted from 65
-                        // and GPUI's snapping puts at 64.
-                        .relative()
-                        .top(px(1.0)).child(channel("Mono", channels == 1.0, window, cx)).child(channel("Stereo", channels >= 2.0, window, cx))),
+                    .child(div().flex().gap(px(3.0)).ml_auto().child(channel_badge("Mono", channels == 1.0, &theme)).child(channel_badge("Stereo", channels >= 2.0, &theme))),
             );
 
         surface(Frame::island(&theme)).size_full().flex().items_center().gap(px(14.0)).p(px(10.0)).child(screen).child(now_playing)

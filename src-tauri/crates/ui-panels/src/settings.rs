@@ -13,7 +13,6 @@
 //!   next change, as the page did.
 //! - Esc closes the window, unless a shortcut is being recorded (then it cancels the recording).
 
-use crate::local::{kerning, scroll_body, setting_text, settings_group};
 use crate::services::PanelServices;
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -21,8 +20,9 @@ use gpui::{
     Render, ScrollHandle, Styled, Subscription, Window,
 };
 use qust_fluent::focus::{tab_stop, FocusNext, FocusPrev};
-use qust_fluent::section::{setting_card, setting_icon};
-use qust_fluent::{shortcut_keys, theme, Button, ButtonKind, Combo, Forced, Icon, ShortcutBox, ShortcutDisplay, Switch, Theme};
+use qust_fluent::scrollbar::scroll_area;
+use qust_fluent::section::{setting_card, setting_icon, setting_text, settings_group};
+use qust_fluent::{shortcut_keys, theme, Button, ButtonKind, Combo, Forced, Icon, ShortcutBox, ShortcutDisplay, Switch, TextStyles, Theme};
 use qust_shell::menu::{Menu, Position};
 use qust_shell::recorder::{record_gpui, Recorded};
 use qust_ui::{format, Background, Binding, Models, UpdateStatus, WindowRoot};
@@ -358,12 +358,11 @@ impl SettingsView {
         items.iter().enumerate().fold(Menu::new(), |menu, (i, (value, text))| menu.action(i as u32 + 1, text, true, *value == current, None))
     }
 
-    /// A combo was clicked: its menu at the bottom-left of the button + 2 px.
+    /// A combo was clicked (`bounds`: its border box): its menu at the bottom-left of the
+    /// button + 2 px.
     pub fn open_combo(&mut self, kind: ComboKind, bounds: Bounds<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        // `Combo` measures its padding box (inside its 1 px border); the page used the border
-        // box (`getBoundingClientRect`).
-        let x = f64::from(bounds.left().as_f32()) - 1.0;
-        let y = f64::from(bounds.bottom().as_f32()) + 1.0 + 2.0;
+        let x = f64::from(bounds.left().as_f32());
+        let y = f64::from(bounds.bottom().as_f32()) + 2.0;
         let this = cx.entity().downgrade();
         self.services.popup_menu(
             window,
@@ -416,7 +415,7 @@ impl SettingsView {
     pub fn set_background(&mut self, on: bool, cx: &mut Context<Self>) {
         self.background = Some(match self.services.set_background(on, cx) {
             Ok(background) => (background, None),
-            Err(error) => (Background { available: true, enabled: !on, starts_with_windows: false }, Some(error)),
+            Err(error) => (Background { available: true, enabled: !on, starts_with_windows: false }, Some(qust_text::shown(&error))),
         });
         cx.notify();
     }
@@ -492,7 +491,8 @@ impl SettingsView {
         self.errors = [None, None, None];
         if let Some(accelerator) = accelerator {
             if let Err(error) = self.services.set_shortcut(SHORTCUTS[index].0, &accelerator, cx) {
-                self.errors[index] = Some(error);
+                // Shown as it comes (the OS's text can be in a right-to-left language).
+                self.errors[index] = Some(qust_text::shown(&error));
             }
         }
         self.services.pause_shortcuts(false, cx);
@@ -534,11 +534,11 @@ impl SettingsView {
     }
 
     /// A toggle: interactive, or (`inert`) shown but neither focusable nor clickable, faded when
-    /// `faded` (`.setting.is-disabled .toggle`). An inert toggle still grows its thumb under the
-    /// pointer, as the page's label did.
+    /// `faded` (`.setting.is-disabled .toggle`: `Switch::disabled`, a group opacity). An inert
+    /// toggle still grows its thumb under the pointer, as the page's label did.
     #[allow(clippy::too_many_arguments)]
     fn toggle(&self, id: &'static str, checked: bool, label: &'static str, selectors: &[&str], inert: bool, faded: bool, handle: &FocusHandle, on_change: impl Fn(&mut SettingsView, bool, &mut Context<SettingsView>) + 'static, cx: &Context<Self>) -> AnyElement {
-        let mut switch = Switch::new(id, checked, label).forced(self.forced(selectors));
+        let mut switch = Switch::new(id, checked, label).forced(self.forced(selectors)).disabled(faded);
         if !inert {
             let this = cx.entity().downgrade();
             let on_change = Rc::new(on_change);
@@ -547,22 +547,22 @@ impl SettingsView {
                 let _ = this.update(cx, |view, cx| on_change(view, on, cx));
             });
         }
-        div().when(faded, |d| d.opacity(0.45)).child(switch).into_any_element()
+        switch.into_any_element()
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn card(icon: Icon, title: impl Into<gpui::SharedString>, description: impl Into<gpui::SharedString>, error: bool, disabled: bool, control: Option<AnyElement>, theme: &Theme, cx: &App) -> gpui::Div {
+    fn card(icon: Icon, title: impl Into<gpui::SharedString>, description: impl Into<gpui::SharedString>, error: bool, disabled: bool, control: Option<AnyElement>, theme: &Theme, _: &App) -> gpui::Div {
         setting_card(theme)
             .child(setting_icon(icon, disabled, theme))
-            .child(setting_text(title, description, error, disabled, theme, cx))
+            .child(setting_text(title, description, error, disabled, theme))
             .when_some(control, |card, control| card.child(control))
     }
 }
 
 /// A group heading after a card: CSS collapses the card's 3 px bottom margin into the heading's
 /// 14 px top margin; GPUI doesn't collapse margins, so the heading adds only the difference.
-fn group(text: &str, first: bool, theme: &Theme, cx: &App) -> gpui::Div {
-    let heading = settings_group(text, first, theme, cx);
+fn group(text: &str, first: bool, theme: &Theme, _: &App) -> gpui::Div {
+    let heading = settings_group(text.to_string(), first, theme);
     if first {
         heading
     } else {
@@ -659,7 +659,7 @@ impl Render for SettingsView {
         );
         list = list
             .child(group("Updates", false, &theme, cx))
-            .child(Self::card(Icon::Update, format!("Qust {}", self.services.version()), row.text.clone(), row.error, false, Some(update_button), &theme, cx))
+            .child(Self::card(Icon::Update, format!("Qust {}", self.services.version()), if row.error { qust_text::shown(&row.text) } else { row.text.clone() }, row.error, false, Some(update_button), &theme, cx))
             .child(Self::card(Icon::Clock, "Check automatically", "Every 8 hours. Updates install when you restart Qust.", false, false, Some(auto), &theme, cx));
 
         // About
@@ -671,8 +671,8 @@ impl Render for SettingsView {
         div()
             .id("settings-window")
             .size_full()
-            // Kerning for every text inside (inherited; see `local::kerning`).
-            .font_features(kerning())
+            // The page's font (kerning on) for every text inside.
+            .font_text()
             .track_focus(&self.focus.root)
             .on_key_down(cx.listener(Self::key_down))
             // Tab and Shift+Tab are bindings, dispatched before key listeners: while recording
@@ -690,7 +690,7 @@ impl Render for SettingsView {
                     cx.stop_propagation();
                 }
             }))
-            .child(scroll_body("settings-body", &self.scroll, self.overflow, list, move |over, cx| {
+            .child(scroll_area("settings-body", &self.scroll, self.overflow, list, move |over, cx| {
                 let _ = measured.update(cx, |view, cx| {
                     view.overflow = over;
                     cx.notify();

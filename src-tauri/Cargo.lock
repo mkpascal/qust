@@ -3391,8 +3391,6 @@ dependencies = [
 [[package]]
 name = "gpui-pre-windows"
 version = "0.3.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7201762420222d5b5ce5bdf0056996199212a3349bfb2457a3a0238c688681f3"
 dependencies = [
  "accesskit",
  "accesskit_windows",
@@ -6529,11 +6527,23 @@ dependencies = [
 name = "qust-app"
 version = "0.1.0"
 dependencies = [
+ "embed-resource",
+ "futures",
+ "gpui-component",
  "gpui-pre",
  "gpui-pre-platform",
  "qust-fluent",
  "qust-player",
+ "qust-shell",
+ "qust-text",
  "qust-ui",
+ "qust-ui-panels",
+ "qust-ui-player",
+ "qust-ui-playlist",
+ "qust-updater",
+ "serde",
+ "serde_json",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -6567,7 +6577,9 @@ dependencies = [
  "image",
  "qust-ui",
  "raw-window-handle",
+ "resvg 0.46.0",
  "serde_json",
+ "unicode-segmentation",
  "windows 0.62.2",
 ]
 
@@ -6645,6 +6657,7 @@ dependencies = [
  "qust-fluent",
  "qust-player",
  "qust-shell",
+ "qust-text",
  "qust-ui",
  "serde_json",
  "smol",
@@ -6660,6 +6673,7 @@ dependencies = [
  "qust-fluent",
  "qust-player",
  "qust-shell",
+ "qust-text",
  "qust-ui",
  "serde_json",
 ]
@@ -6673,6 +6687,7 @@ dependencies = [
  "qust-fluent",
  "qust-player",
  "qust-shell",
+ "qust-text",
  "qust-ui",
  "serde_json",
 ]

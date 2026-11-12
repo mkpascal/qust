@@ -20,6 +20,8 @@ qust-ui = { path = "../ui" }
 qust-shell = { path = "../shell" }
 serde_json = "1"
 smol = "2"
+# Right-to-left text: what the windows draw of stream texts and OS messages.
+qust-text = { path = "../text" }
 
 [dev-dependencies]
 qust-ui = { path = "../ui", features = ["capture"] }

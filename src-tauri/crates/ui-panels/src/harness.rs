@@ -88,25 +88,7 @@ pub async fn settle(opened: &Opened, cx: &mut AsyncApp) {
 /// opens; until then it lays out at the system's default size. Waits (up to a second) until the
 /// window has the fixture's size, so clicks land where the layout file says.
 pub async fn wait_for_size(opened: &Opened, expected: (f32, f32), cx: &mut AsyncApp) {
-    // Laid out at that size: the scroll area (the whole window's height) says so.
-    let mut settled = 0;
-    for _ in 0..200 {
-        let height = cx.update(|cx| {
-            opened.session.frames(1, cx);
-            let handle = match &opened.panel {
-                Panel::Settings(view) => view.read(cx).scroll_handle().clone(),
-                Panel::Info(view) => view.read(cx).scroll_handle().clone(),
-            };
-            handle.bounds().size.height.as_f32()
-        });
-        // Three times in a row, 10 ms apart: a late resize message can still arrive after the first.
-        settled = if (height - expected.1).abs() < 0.5 { settled + 1 } else { 0 };
-        if settled >= 3 {
-            break;
-        }
-        cx.background_executor().timer(Duration::from_millis(10)).await;
-    }
-    cx.update(|cx| opened.session.frames(2, cx));
+    opened.session.wait_for_size(expected, cx).await;
 }
 
 /// Replays the fixture's actions.

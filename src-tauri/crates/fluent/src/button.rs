@@ -21,7 +21,7 @@ use crate::focus::is_focus_visible;
 use crate::icons::{icon, Icon};
 use crate::state::Forced;
 use crate::surface::{border_layers, focus_ring, inset_layer, Border};
-use crate::text::TextStyles;
+use crate::text::{line, TextStyles};
 use crate::theme::theme;
 use crate::tooltip::TooltipExt;
 use gpui::prelude::FluentBuilder;
@@ -276,7 +276,7 @@ impl RenderOnce for Button {
                     glyph.into_any_element()
                 })
             })
-            .when_some(self.label, |b, label| b.child(div().relative().child(label)))
+            .when_some(self.label, |b, label| b.child(line(label).relative()))
             .when_some(self.trailing, |b, trailing| b.child(div().relative().flex().child(trailing)))
             .when(self.update_dot, |b| {
                 // 7 px accent dot at top 5 / right 7, with a 2 px --bg ring (box-shadow spread).

@@ -18,7 +18,7 @@ use crate::icons::{icon, Icon};
 use crate::paint::bounds_probe;
 use crate::state::Forced;
 use crate::surface::{border_layers, focus_ring, inset_layer, Border};
-use crate::text::TextStyles;
+use crate::text::{line, TextStyles};
 use crate::theme::theme;
 use crate::tooltip::TooltipExt;
 use gpui::prelude::FluentBuilder;
@@ -64,7 +64,8 @@ impl Combo {
         self
     }
 
-    /// Called with the combo's bounds (window coordinates, CSS px).
+    /// Called with the combo's border box (window coordinates, CSS px), as the page's
+    /// `getBoundingClientRect()`: the native menu opens at its bottom-left + 2 px.
     pub fn on_click(mut self, handler: impl Fn(Bounds<Pixels>, &mut Window, &mut App) + 'static) -> Self {
         self.on_click = Some(Rc::new(handler));
         self
@@ -111,7 +112,7 @@ impl RenderOnce for Combo {
                     .when(!forced.any(), |layer| layer.group_active(GROUP, |s| s.bg(theme.control_pressed))),
             )
             .children(border_layers(4.0, Border::top(theme.control_stroke, theme.control_stroke_top), false, -1.0))
-            .child(div().relative().child(self.text.clone()))
+            .child(line(self.text.clone()).relative())
             .child(icon(Icon::SettingsChevron, 12.0).relative().text_color(theme.text_2))
             .role(Role::ComboBox)
             .aria_label(self.label.unwrap_or(self.text))
@@ -121,8 +122,9 @@ impl RenderOnce for Combo {
         }
         if let Some(handler) = self.on_click {
             root = root.on_click(move |_, window, cx| {
+                // The probe measures the padding box, inside the 1 px border.
                 if let Some(bounds) = *bounds.read(cx) {
-                    handler(bounds, window, cx);
+                    handler(bounds.dilate(px(1.0)), window, cx);
                 }
             });
         }
@@ -216,7 +218,7 @@ pub fn keycap(text: impl Into<SharedString>, unavailable: bool, theme: &crate::T
         .semibold()
         .type_size(12.0, 20.0)
         .when(unavailable, |k| k.line_through())
-        .child(text.into())
+        .child(line(text))
 }
 
 impl RenderOnce for ShortcutBox {
@@ -234,8 +236,8 @@ impl RenderOnce for ShortcutBox {
         let ring = forced.focus_visible || self.focus.as_ref().is_some_and(|handle| is_focus_visible(handle, window, cx));
         let content: Vec<gpui::AnyElement> = match self.display {
             ShortcutDisplay::Keys { keys, unavailable } => keys.into_iter().map(|key| keycap(key, unavailable, &theme).relative().into_any_element()).collect(),
-            ShortcutDisplay::Unassigned => vec![div().relative().child("Not set").into_any_element()],
-            ShortcutDisplay::Recording => vec![div().relative().child("Press a shortcut\u{2026}").into_any_element()],
+            ShortcutDisplay::Unassigned => vec![line("Not set").relative().into_any_element()],
+            ShortcutDisplay::Recording => vec![line("Press a shortcut\u{2026}").relative().into_any_element()],
         };
         let mut root = div()
             .id(self.id.clone())

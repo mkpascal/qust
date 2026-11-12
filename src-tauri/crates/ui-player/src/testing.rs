@@ -248,20 +248,7 @@ pub fn build(setup: &Setup, recorder: &Recorder, window: &mut Window, cx: &mut A
 /// later, and until then the first frames lay out at the system's default size, so early input
 /// would go to the wrong place.
 pub async fn wait_for_size(session: &Session, size: (f32, f32), cx: &mut gpui::AsyncApp) {
-    let mut settled = 0;
-    for _ in 0..200 {
-        let now = cx.update(|cx| {
-            session.frames(1, cx);
-            cx.update_window(session.any(), |_, window, _| window.viewport_size()).ok()
-        });
-        let at_size = now.is_some_and(|s| (s.width.as_f32() - size.0).abs() < 0.5 && (s.height.as_f32() - size.1).abs() < 0.5);
-        // Three times in a row: a late resize can still come after the first.
-        settled = if at_size { settled + 1 } else { 0 };
-        if settled >= 3 {
-            break;
-        }
-        cx.background_executor().timer(std::time::Duration::from_millis(10)).await;
-    }
+    session.wait_for_size(size, cx).await;
     cx.update(|cx| {
         // The pointer starts where the user's cursor is: park it on bare background (the window's
         // bottom-left padding) so nothing shows a stray hover.

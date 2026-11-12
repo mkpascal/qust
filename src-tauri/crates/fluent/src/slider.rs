@@ -14,12 +14,16 @@
 //! centre a pointer value snaps to it (`snap`). Double-click: back to the centre when there is
 //! one. Wheel: ±5 % of the span then commit, and never scrolls anything. Keys when focused:
 //! Right/Up +5 %, Left/Down −5 %, PageUp +10 %, PageDown −10 %, Home min, End max, then commit.
-//! While dragging, values from the owner are ignored; otherwise a new value from the owner
-//! replaces the shown one.
+//! While dragging, values from the owner are ignored; otherwise the owner's value is shown
+//! whenever it differs from the shown one (the page's `renderLevels` re-applied it on every
+//! state), except an owner value that is still the one from before the user's last change (the
+//! command it sent hasn't come back yet): showing it would flick the thumb back for a frame.
 //!
-//! Events: `on_input(value)` for every change of the shown value (volume and balance send their
-//! command there; labels follow it, the seek time too while dragging), `on_commit(value)` at the
-//! end of a drag and after a wheel or key step (the seek bar seeks there).
+//! Events: `on_input(value)` for every change of the shown value by the user (volume and
+//! balance send their command there), `on_commit(value)` at the end of a drag and after a wheel
+//! or key step (the seek bar seeks there), `on_drag(dragging)` when a drag starts and ends. A
+//! label next to the slider shows what the slider shows: keep a [`Mirror`] fed by those three
+//! and the owner's value, and render the label from [`Mirror::shown`].
 
 use crate::a11y::A11yExt;
 use crate::color::Color;
@@ -68,12 +72,65 @@ impl SliderSize {
 }
 
 type ValueHandler = Rc<dyn Fn(i64, &mut Window, &mut App)>;
+type DragHandler = Rc<dyn Fn(bool, &mut Window, &mut App)>;
+
+/// What a slider shows, given the owner's values and the user's changes: the rule the slider
+/// itself follows (see the module docs), for the owner's labels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Mirror {
+    pub shown: i64,
+    pub dragging: bool,
+    /// The owner's value when the user last changed the value, until the owner moves on.
+    stale: Option<i64>,
+}
+
+impl Mirror {
+    pub fn new(value: i64) -> Mirror {
+        Mirror { shown: value, dragging: false, stale: None }
+    }
+
+    /// The owner's value (at every render or model change). True when the shown value changed.
+    pub fn owner(&mut self, value: i64) -> bool {
+        if self.dragging {
+            return false;
+        }
+        if self.stale.is_some_and(|stale| stale == value) && value != self.shown {
+            return false;
+        }
+        self.stale = None;
+        if value == self.shown {
+            return false;
+        }
+        self.shown = value;
+        true
+    }
+
+    /// A value the user chose (`on_input`); `owner` is the owner's value at that moment.
+    pub fn input(&mut self, value: i64, owner: i64) -> bool {
+        if self.stale.is_none() {
+            self.stale = Some(owner);
+        }
+        let changed = self.shown != value;
+        self.shown = value;
+        changed
+    }
+
+    /// `on_drag`.
+    pub fn drag(&mut self, dragging: bool) {
+        self.dragging = dragging;
+    }
+
+    /// `on_commit` (the end of a drag, or a wheel or key step).
+    pub fn commit(&mut self, value: i64) {
+        self.dragging = false;
+        self.shown = value;
+    }
+}
 
 /// What a slider remembers between frames (element state, keyed by its id).
 pub struct SliderMemory {
-    shown: i64,
-    last_owner_value: i64,
-    dragging: bool,
+    mirror: Mirror,
+    owner: i64,
     hovered: bool,
     dot: Transition,
     // Where the box was laid out last frame, to map a mouse-down to a value.
@@ -82,11 +139,11 @@ pub struct SliderMemory {
 
 impl SliderMemory {
     pub fn shown(&self) -> i64 {
-        self.shown
+        self.mirror.shown
     }
 
     pub fn dragging(&self) -> bool {
-        self.dragging
+        self.mirror.dragging
     }
 }
 
@@ -108,6 +165,7 @@ pub struct Slider {
     tooltip: Option<SharedString>,
     on_input: Option<ValueHandler>,
     on_commit: Option<ValueHandler>,
+    on_drag: Option<DragHandler>,
     style: StyleRefinement,
 }
 
@@ -131,6 +189,7 @@ impl Slider {
             tooltip: None,
             on_input: None,
             on_commit: None,
+            on_drag: None,
             style: StyleRefinement::default(),
         }
     }
@@ -183,6 +242,12 @@ impl Slider {
 
     pub fn on_commit(mut self, handler: impl Fn(i64, &mut Window, &mut App) + 'static) -> Self {
         self.on_commit = Some(Rc::new(handler));
+        self
+    }
+
+    /// Called with true when a pointer drag starts, false when it ends (before `on_commit`).
+    pub fn on_drag(mut self, handler: impl Fn(bool, &mut Window, &mut App) + 'static) -> Self {
+        self.on_drag = Some(Rc::new(handler));
         self
     }
 }
@@ -257,25 +322,20 @@ impl RenderOnce for Slider {
         let range = Range { min: self.min, max: self.max, center: self.center };
         let owner_value = range.clamp(self.value as f64);
         let memory = window.use_keyed_state(self.id.clone(), cx, |_, _| SliderMemory {
-            shown: owner_value,
-            last_owner_value: owner_value,
-            dragging: false,
+            mirror: Mirror::new(owner_value),
+            owner: owner_value,
             hovered: false,
             dot: Transition::new(1.0, timing::SLIDER_DOT, EASE),
             bounds: None,
         });
-        // A new value from the owner replaces the shown one, unless the user is dragging.
+        // The owner's value is shown when it differs (the module docs).
         let (shown, _dragging, hovered, dot_scale, dot_running) = memory.update(cx, |m, _| {
-            if owner_value != m.last_owner_value {
-                m.last_owner_value = owner_value;
-                if !m.dragging {
-                    m.shown = owner_value;
-                }
-            }
-            let dragging = m.dragging || self.forced_dragging;
+            m.owner = owner_value;
+            m.mirror.owner(owner_value);
+            let dragging = m.mirror.dragging || self.forced_dragging;
             let hovered = m.hovered || self.forced.hover;
             m.dot.set(if dragging { 0.833 } else if hovered { 1.167 } else { 1.0 }, &motion);
-            (m.shown, dragging, hovered, m.dot.value(&motion), m.dot.running(&motion))
+            (m.mirror.shown, dragging, hovered, m.dot.value(&motion), m.dot.running(&motion))
         });
         let _ = hovered;
         if dot_running {
@@ -301,6 +361,7 @@ impl RenderOnce for Slider {
         let snap = self.snap;
         let on_input = self.on_input.clone();
         let on_commit = self.on_commit.clone();
+        let on_drag = self.on_drag.clone();
         let focus = self.focus.clone();
         let memory_for_paint = memory.clone();
 
@@ -332,7 +393,7 @@ impl RenderOnce for Slider {
                         let memory = memory_for_paint.clone();
                         let on_input = on_input.clone();
                         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
-                            if phase != DispatchPhase::Bubble || !memory.read(cx).dragging {
+                            if phase != DispatchPhase::Bubble || !memory.read(cx).mirror.dragging {
                                 return;
                             }
                             let next = range.from_pointer(event.position.x.as_f32(), rail_left, rail_width, snap);
@@ -340,15 +401,19 @@ impl RenderOnce for Slider {
                         });
                         let memory = memory_for_paint.clone();
                         let on_commit = on_commit.clone();
+                        let on_drag = on_drag.clone();
                         window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
-                            if phase != DispatchPhase::Bubble || event.button != MouseButton::Left || !memory.read(cx).dragging {
+                            if phase != DispatchPhase::Bubble || event.button != MouseButton::Left || !memory.read(cx).mirror.dragging {
                                 return;
                             }
                             let value = memory.update(cx, |m, cx| {
-                                m.dragging = false;
+                                m.mirror.drag(false);
                                 cx.notify();
-                                m.shown
+                                m.mirror.shown
                             });
+                            if let Some(handler) = &on_drag {
+                                handler(false, window, cx);
+                            }
                             if let Some(handler) = &on_commit {
                                 handler(value, window, cx);
                             }
@@ -380,6 +445,7 @@ impl RenderOnce for Slider {
             let (left, right) = self.size.insets();
             let memory_down = memory.clone();
             let on_input_down = self.on_input.clone();
+            let on_drag_down = self.on_drag.clone();
             let focus_down = focus.clone();
             root = root.on_mouse_down(MouseButton::Left, move |event: &MouseDownEvent, window, cx| {
                 if let Some(handle) = &focus_down {
@@ -388,9 +454,12 @@ impl RenderOnce for Slider {
                 // The rail's position comes from where the box was laid out last frame.
                 let Some(bounds) = memory_down.read(cx).bounds() else { return };
                 memory_down.update(cx, |m, cx| {
-                    m.dragging = true;
+                    m.mirror.drag(true);
                     cx.notify();
                 });
+                if let Some(handler) = &on_drag_down {
+                    handler(true, window, cx);
+                }
                 let rail_left = bounds.origin.x.as_f32() + left;
                 let rail_width = bounds.size.width.as_f32() - left - right;
                 let next = range.from_pointer(event.position.x.as_f32(), rail_left, rail_width, snap);
@@ -414,24 +483,24 @@ impl RenderOnce for Slider {
                 if dy == 0.0 {
                     return;
                 }
-                let current = memory_wheel.read(cx).shown;
+                let current = memory_wheel.read(cx).mirror.shown;
                 change(&memory_wheel, range.wheel(current, dy > 0.0), on_input_wheel.as_ref(), window, cx);
                 if let Some(handler) = &on_commit_wheel {
-                    handler(memory_wheel.read(cx).shown, window, cx);
+                    handler(memory_wheel.read(cx).mirror.shown, window, cx);
                 }
             });
             let memory_key = memory.clone();
             let on_input_key = self.on_input.clone();
             let on_commit_key = self.on_commit.clone();
             root = root.on_key_down(move |event, window, cx| {
-                let current = memory_key.read(cx).shown;
+                let current = memory_key.read(cx).mirror.shown;
                 let Some(next) = range.key(current, &event.keystroke.key) else { return };
                 if event.keystroke.modifiers.modified() {
                     return;
                 }
                 change(&memory_key, next, on_input_key.as_ref(), window, cx);
                 if let Some(handler) = &on_commit_key {
-                    handler(memory_key.read(cx).shown, window, cx);
+                    handler(memory_key.read(cx).mirror.shown, window, cx);
                 }
                 cx.stop_propagation();
             });
@@ -459,12 +528,12 @@ impl SliderMemory {
 
 fn change(memory: &gpui::Entity<SliderMemory>, next: i64, on_input: Option<&ValueHandler>, window: &mut Window, cx: &mut App) {
     let changed = memory.update(cx, |m, cx| {
-        if m.shown == next {
-            return false;
+        let owner = m.owner;
+        let changed = m.mirror.input(next, owner);
+        if changed {
+            cx.notify();
         }
-        m.shown = next;
-        cx.notify();
-        true
+        changed
     });
     if changed {
         if let Some(handler) = on_input {
@@ -519,5 +588,37 @@ impl SliderPaint {
         // ::after { inset: 4px } scaled about its centre.
         let dot = (thumb - 8.0) * self.dot_scale;
         window.paint_quad(fill(rect(cx - dot / 2.0, cy - dot / 2.0, dot, dot), self.dot).corner_radii(px(dot / 2.0)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mirror_follows_the_slider_rule() {
+        let mut m = Mirror::new(70);
+        // The owner's value is shown whenever it differs, not only when it changes.
+        assert!(m.owner(50));
+        assert_eq!(m.shown, 50);
+        // A user change: the owner still reports the old value until its command comes back;
+        // that stale value doesn't flick the label back.
+        assert!(m.input(55, 50));
+        assert!(!m.owner(50));
+        assert_eq!(m.shown, 55);
+        // The owner moves on: shown again.
+        assert!(!m.owner(55));
+        assert!(m.owner(40));
+        assert_eq!(m.shown, 40);
+        // While dragging, the owner is ignored; the commit shows the user's value.
+        m.drag(true);
+        m.input(90, 40);
+        assert!(!m.owner(41));
+        assert_eq!(m.shown, 90);
+        m.commit(90);
+        assert!(!m.dragging);
+        // The owner caught up, or another value: shown when it differs.
+        assert!(!m.owner(90));
+        assert!(m.owner(10));
     }
 }

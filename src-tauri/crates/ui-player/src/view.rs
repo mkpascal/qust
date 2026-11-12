@@ -15,7 +15,7 @@ use crate::transport::TransportView;
 use gpui::{
     div, prelude::*, px, AnyWindowHandle, App, Context, Entity, Global, IntoElement, MouseButton, MouseUpEvent, Render, StyleRefinement, WeakEntity, Window,
 };
-use qust_fluent::Forced;
+use qust_fluent::{Forced, TextStyles};
 use qust_ui::{Models, WindowRoot};
 use std::cell::{Cell, OnceCell};
 use std::collections::HashMap;
@@ -265,7 +265,7 @@ impl Render for PlayerView {
             .w(px(WIDTH))
             .h(px(HEIGHT))
             // Chromium kerns; GPUI only when asked (crate::text).
-            .font_features(crate::text::kerning())
+            .font_text()
             // Right-click anywhere outside the cartridges (the cartridges show their own menus):
             // the transport menu. Chromium sends `contextmenu` on the button's release.
             .on_mouse_up(MouseButton::Right, move |_: &MouseUpEvent, window, cx| {

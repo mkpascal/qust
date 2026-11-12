@@ -10,8 +10,9 @@
 //!
 //! **Opacity.** The dragged cartridge fades to 0.35 as a group in CSS; GPUI applies opacity to
 //! each primitive, which would let the fill show through the text. So the source is drawn with
-//! its colors flattened instead ([`Fade`]): the fill at 35 %, and what sits on the fill (text,
-//! icons, the divider) as the opaque color the group gives over the window background.
+//! its colors flattened instead (`qust_fluent::Fade`): the fill at 35 %, and what sits on the
+//! fill (text, icons, the divider) as the opaque color the group gives over the window
+//! background.
 //!
 //! **Live parts.** The equalizer and the pulsing bolt animate for as long as something plays,
 //! so they are live layers of the window root ([`BadgeView`], one per slot) drawn in a slot
@@ -26,7 +27,7 @@ use gpui::{
 };
 use qust_fluent::motion::{dropped_scale, equalizer_scale, motion, preloading_opacity, timing};
 use qust_fluent::paint::css_shadow;
-use qust_fluent::{icon, theme, Color, Forced, Icon, TextStyles, Theme, TooltipExt};
+use qust_fluent::{icon, line, theme, Color, Forced, Icon, TextStyles, Theme, TooltipExt};
 use qust_ui::models::Deck;
 use qust_ui::{portal_slot, Cartridge, Preload};
 use std::cell::Cell;
@@ -90,30 +91,7 @@ impl Look {
 }
 
 /// The group opacity of the dragged cartridge, flattened (see the module docs).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Fade {
-    pub opacity: f32,
-    /// The opaque window background behind the cartridge.
-    pub bg: Color,
-}
-
-impl Fade {
-    /// A layer painted straight on the background (fill, ring, border).
-    fn layer(fade: Option<Fade>, color: Color) -> Color {
-        match fade {
-            Some(f) => color.mix(f.opacity),
-            None => color,
-        }
-    }
-
-    /// Something painted on `fill` (text, icons, the divider): the color the group gives.
-    fn on(fade: Option<Fade>, color: Color, fill: Color) -> Color {
-        match fade {
-            Some(f) => color.over(fill).mix(f.opacity).over(f.bg),
-            None => color,
-        }
-    }
-}
+pub use qust_fluent::paint::Fade;
 
 /// Where a cartridge is drawn and how.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -216,7 +194,7 @@ pub struct Interaction {
 
 /// One cartridge at scale `k`, `width` × `height` before scaling, positioned in its cell
 /// (centred, as `transform-origin: center`), or at the ghost's place by the caller.
-pub fn cartridge(look: &Look, k: f32, mode: Mode, interaction: Option<Interaction>, theme: &Theme, window: &Window, cx: &App) -> AnyElement {
+pub fn cartridge(look: &Look, k: f32, mode: Mode, interaction: Option<Interaction>, theme: &Theme, _window: &Window, cx: &App) -> AnyElement {
     let colors = palette(look, mode, theme);
     let fade = interaction.as_ref().and_then(|i| i.fade);
     let natural = match mode {
@@ -247,7 +225,12 @@ pub fn cartridge(look: &Look, k: f32, mode: Mode, interaction: Option<Interactio
     }
     if let Some(border) = colors.border {
         let border = Fade::layer(fade, border);
-        frame.push(layer(-1.0, radius).border_1().border_color(border).when(colors.dashed, |l| l.border_dashed()).into_any_element());
+        // Chromium's dashes for the empty cartridge (`qust_fluent::dashed_border`).
+        frame.push(if colors.dashed {
+            qust_fluent::dashed_border(radius, border).absolute().top(px(-1.0)).left(px(-1.0)).right(px(-1.0)).bottom(px(-1.0)).into_any_element()
+        } else {
+            layer(-1.0, radius).border_1().border_color(border).into_any_element()
+        });
     }
 
     // The badges: a slot for the live layer in the grid, drawn inline on the ghost.
@@ -288,27 +271,11 @@ pub fn cartridge(look: &Look, k: f32, mode: Mode, interaction: Option<Interactio
         body.child(icon(Icon::Plus, 16.0 * k).text_color(text)).child(div().font_text().regular().type_size(13.0 * k, 18.0 * k).whitespace_nowrap().child("Load"))
     } else {
         let cartridge = look.cartridge.clone().unwrap_or_default();
-        // max-width 100% of the body's content box, cut with Chromium's ellipsis.
+        // max-width 100% of the body's content box, cut with Chromium's ellipsis (a cut text's
+        // box is the whole max-width, the text on its left), on Chromium's baseline.
         let available = (CELL_WIDTH - 2.0 - 24.0) * k;
-        let name_font = crate::text::page_font(true, gpui::FontWeight::SEMIBOLD, crate::text::kerning());
-        let host_font = crate::text::page_font(false, gpui::FontWeight::NORMAL, crate::text::kerning());
-        let (name, name_cut) = crate::text::ellipsized(&crate::text::shown(&cartridge.title), &name_font, 15.0 * k, available, window);
-        let (host_text, host_cut) = crate::text::ellipsized(&crate::text::shown(&host(&cartridge.url)), &host_font, 11.0 * k, available, window);
-        // A cut text's box is the whole max-width, the text on its left (not centred).
-        body.child(div().whitespace_nowrap().when(name_cut, |d| d.w(px(available))).font_display().semibold().type_size(15.0 * k, 20.0 * k).child(name))
-            .child(
-                div()
-                    .whitespace_nowrap()
-                    .when(host_cut, |d| d.w(px(available)))
-                    .font_text()
-                    .regular()
-                    .type_size(11.0 * k, 14.0 * k)
-                    .text_color(host_color)
-                    // On Chromium's baseline (crate::text::baseline_shift): 1 px up for 11/14.
-                    .relative()
-                    .top(px(crate::text::baseline_shift(11.0 * k, 14.0 * k, false, window)))
-                    .child(host_text),
-            )
+        body.child(line(crate::text::shown(&cartridge.title)).ellipsis().max_w(px(available)).font_display().semibold().type_size(15.0 * k, 20.0 * k))
+            .child(line(crate::text::shown(&host(&cartridge.url))).ellipsis().max_w(px(available)).font_text().regular().type_size(11.0 * k, 14.0 * k).text_color(host_color))
     };
     body = body.child(badge);
 
@@ -788,7 +755,7 @@ impl Render for CartridgesView {
                 body_ring,
                 eject_ring,
                 drop_target: target,
-                fade: faded.then_some(Fade { opacity: DRAG_OPACITY, bg: theme.bg }),
+                fade: faded.then_some(Fade::new(DRAG_OPACITY, theme.bg)),
                 root: self.shared.root.clone(),
                 on_body: Box::new(move |window, cx| {
                     let _ = body.update(cx, |view, cx| view.click_body(slot, window, cx));

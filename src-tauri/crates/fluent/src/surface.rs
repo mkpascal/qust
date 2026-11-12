@@ -16,7 +16,7 @@
 
 use crate::color::Color;
 use crate::theme::Theme;
-use gpui::{div, prelude::FluentBuilder, px, AnyElement, Div, IntoElement, ParentElement, Styled};
+use gpui::{canvas, div, point, prelude::FluentBuilder, px, size, AnyElement, Bounds, Div, IntoElement, ParentElement, PathBuilder, Pixels, Styled, Window};
 
 /// A 1 px border's colors, per side.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -147,7 +147,14 @@ pub fn inset_layer(inset: f32, radius: f32) -> Div {
 /// the other sides at width 0 (GPUI tapers a corner between a side of width 1 and one of width
 /// 0, which is how Chromium splits a corner between two colors).
 pub fn border_layers(radius: f32, border: Border, dashed: bool, inset: f32) -> Vec<AnyElement> {
-    let layer = || inset_layer(inset, radius).when(dashed, |layer| layer.border_dashed());
+    let layer = || inset_layer(inset, radius);
+    if dashed {
+        // Chromium's dashes ([`dashed_border`]); the page's dashed borders are one color.
+        if border.top.a <= 0.0 {
+            return Vec::new();
+        }
+        return vec![dashed_border(radius, border.top).absolute().top(px(inset)).left(px(inset)).right(px(inset)).bottom(px(inset)).into_any_element()];
+    }
     if border.uniform() {
         if border.top.a <= 0.0 {
             return Vec::new();
@@ -178,6 +185,110 @@ pub fn border_layers(radius: f32, border: Border, dashed: bool, inset: f32) -> V
                 .into_any_element()
         })
         .collect()
+}
+
+/// A 1 px dashed border of corner radius `radius` filling its bounds (the border box), drawn as
+/// Chromium draws `border: 1px dashed` around a rounded box: the box snapped to device pixels,
+/// its border's centre line as one closed path (Skia's `addRRect`: from the start of the top edge,
+/// clockwise, corners included), dashed 3 × the width on and a gap near 2 × the width chosen so
+/// the dashes fill the whole path evenly (Blink's `StrokeData::SelectBestDashGap`), butt ends.
+/// GPUI's own `border_dashed` uses another pattern (and restarts it per side).
+pub fn dashed_border(radius: f32, color: Color) -> gpui::Canvas<()> {
+    canvas(|_, _, _| {}, move |bounds, _, window, _| paint_dashed(bounds, radius, color, window))
+}
+
+/// The dash and gap lengths for a closed path of `length` (Blink's `SelectBestDashGap`).
+pub fn dash_gap(length: f32, dash: f32, gap: f32) -> f32 {
+    let min = (length / (dash + gap)).floor().max(1.0);
+    let max = min + 1.0;
+    let min_gap = (length - min * dash) / min;
+    let max_gap = (length - max * dash) / max;
+    if max_gap <= 0.0 || (min_gap - gap).abs() < (max_gap - gap).abs() {
+        min_gap
+    } else {
+        max_gap
+    }
+}
+
+fn paint_dashed(bounds: Bounds<Pixels>, radius: f32, color: Color, window: &mut Window) {
+    let scale = window.scale_factor();
+    // The border box snapped to device pixels (round half up, as Chromium's pixel snapping).
+    let snap = |v: f32| (v * scale + 0.5).floor() / scale;
+    let (left, top) = (snap(bounds.origin.x.as_f32()), snap(bounds.origin.y.as_f32()));
+    let (right, bottom) = (snap(bounds.right().as_f32()), snap(bounds.bottom().as_f32()));
+    let width = (scale.floor().max(1.0)) / scale;
+    let half = width / 2.0;
+    let (l, t, r, b) = (left + half, top + half, right - half, bottom - half);
+    let rad = (radius - half).max(0.0).min((r - l) / 2.0).min((b - t) / 2.0);
+    let (straight_x, straight_y) = ((r - l - 2.0 * rad).max(0.0), (b - t - 2.0 * rad).max(0.0));
+    let arc = std::f32::consts::FRAC_PI_2 * rad;
+    let length = 2.0 * straight_x + 2.0 * straight_y + 4.0 * arc;
+    if length <= 0.0 {
+        return;
+    }
+    let dash = 3.0 * width;
+    if length <= dash * 2.0 {
+        return;
+    }
+    let gap = dash_gap(length, dash, 2.0 * width);
+    // The path, clockwise from the start of the top edge: (kind, length): 0 line, 1 arc.
+    // Lines: start point and direction; arcs: centre and start angle.
+    struct Piece {
+        len: f32,
+        line: Option<((f32, f32), (f32, f32))>,
+        arc: Option<((f32, f32), f32)>,
+    }
+    use std::f32::consts::{FRAC_PI_2, PI};
+    let pieces = [
+        Piece { len: straight_x, line: Some(((l + rad, t), (1.0, 0.0))), arc: None },
+        Piece { len: arc, line: None, arc: Some(((r - rad, t + rad), -FRAC_PI_2)) },
+        Piece { len: straight_y, line: Some(((r, t + rad), (0.0, 1.0))), arc: None },
+        Piece { len: arc, line: None, arc: Some(((r - rad, b - rad), 0.0)) },
+        Piece { len: straight_x, line: Some(((r - rad, b), (-1.0, 0.0))), arc: None },
+        Piece { len: arc, line: None, arc: Some(((l + rad, b - rad), FRAC_PI_2)) },
+        Piece { len: straight_y, line: Some(((l, b - rad), (0.0, -1.0))), arc: None },
+        Piece { len: arc, line: None, arc: Some(((l + rad, t + rad), PI)) },
+    ];
+    let mut start = 0.0f32;
+    let mut on = 0.0f32;
+    while on < length {
+        let off = (on + dash).min(length);
+        // The parts of [on, off) on each piece.
+        let mut at = start;
+        for piece in &pieces {
+            let (from, to) = (on.max(at), off.min(at + piece.len));
+            if to > from && piece.len > 0.0 {
+                let (a, z) = (from - at, to - at);
+                if let Some(((x, y), (dx, dy))) = piece.line {
+                    // A straight dash: a quad across the stroke's width.
+                    let (x0, y0) = (x + dx * a, y + dy * a);
+                    let (x1, y1) = (x + dx * z, y + dy * z);
+                    let (minx, maxx) = (x0.min(x1) - if dy != 0.0 { half } else { 0.0 }, x0.max(x1) + if dy != 0.0 { half } else { 0.0 });
+                    let (miny, maxy) = (y0.min(y1) - if dx != 0.0 { half } else { 0.0 }, y0.max(y1) + if dx != 0.0 { half } else { 0.0 });
+                    window.paint_quad(gpui::fill(Bounds::new(point(px(minx), px(miny)), size(px(maxx - minx), px(maxy - miny))), color));
+                } else if let Some(((cx, cy), angle)) = piece.arc {
+                    let mut path = PathBuilder::stroke(px(width));
+                    let steps = (((z - a) / 0.5).ceil() as usize).max(2);
+                    for i in 0..=steps {
+                        let s = a + (z - a) * i as f32 / steps as f32;
+                        let theta = angle + s / rad;
+                        let p = point(px(cx + rad * theta.cos()), px(cy + rad * theta.sin()));
+                        if i == 0 {
+                            path.move_to(p);
+                        } else {
+                            path.line_to(p);
+                        }
+                    }
+                    if let Ok(path) = path.build() {
+                        window.paint_path(path, color);
+                    }
+                }
+            }
+            at += piece.len;
+        }
+        on += dash + gap;
+        start = 0.0;
+    }
 }
 
 /// A `relative()` div drawn as `frame`, with the frame's border in its layout.

@@ -3,9 +3,9 @@
 
 use crate::dialog::DialogTarget;
 use crate::view::{forced, Shared};
-use gpui::{prelude::*, px, Context, FocusHandle, IntoElement, Radians, Render, Transformation, Window};
+use gpui::{prelude::*, px, Context, FocusHandle, IntoElement, Render, Window};
 use qust_fluent::motion::{motion, timing, Transition, FLUENT};
-use qust_fluent::{icon, surface, theme, Button, Frame, Icon};
+use qust_fluent::{rotated_icon, surface, theme, Button, Frame, Icon};
 use std::f32::consts::PI;
 use std::rc::Rc;
 
@@ -35,7 +35,7 @@ impl Render for DeckView {
         if self.chevron.running(&motion) && motion.wants_frames() {
             window.request_animation_frame();
         }
-        let chevron = icon(Icon::Chevron, 12.0).ml(px(1.0)).text_color(theme.text_2).with_transformation(Transformation::rotate(Radians(turn * PI)));
+        let chevron = rotated_icon(Icon::Chevron, 12.0, turn * PI).ml(px(1.0)).text_color(theme.text_2);
 
         let s = self.shared.clone();
         let this = cx.entity().downgrade();

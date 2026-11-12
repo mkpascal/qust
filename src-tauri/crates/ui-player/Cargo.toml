@@ -18,6 +18,8 @@ qust-fluent = { path = "../fluent" }
 qust-ui = { path = "../ui" }
 # Menu descriptions and accelerator labels only (no GPUI in it without its "gpui" feature).
 qust-shell = { path = "../shell" }
+# Right-to-left text: what the window draws of titles, station names and hosts.
+qust-text = { path = "../text" }
 serde_json = "1"
 futures = { version = "0.3", optional = true }
 

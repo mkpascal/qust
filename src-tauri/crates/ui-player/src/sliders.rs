@@ -7,64 +7,19 @@
 //! **Values.** `qust_fluent::Slider` shows the player's value unless the user is dragging it,
 //! and reports only the user's changes (`on_input`), so nothing echoes back as a command. The
 //! labels next to the sliders ("70%", "L 30", the seek time) show what the slider shows, the
-//! user's value while dragging included; the slider doesn't expose that, so [`Mirror`] follows
-//! the same rule beside it: a press on the slider starts a drag (seen in the capture phase,
-//! before the slider handles it), the commit at the release ends it, user values come through
-//! `on_input`, the player's only while not dragging. Candidate for `qust-fluent`: a way for the
-//! owner to read the shown value (see the report).
+//! user's value while dragging included: a `qust_fluent::Mirror` per slider follows the
+//! slider's own rule from its `on_input` / `on_drag` / `on_commit` and the player's values.
 
 use crate::view::{forced, Shared};
-use gpui::{div, prelude::*, px, Context, Entity, FocusHandle, IntoElement, MouseButton, MouseDownEvent, Render, SharedString, Window};
-use qust_fluent::{icon, surface, theme, Frame, Icon, Slider, SliderSize, TextStyles};
+use gpui::{div, prelude::*, px, Context, Entity, FocusHandle, IntoElement, Render, Window};
+use qust_fluent::{icon, line, surface, theme, Frame, Icon, Slider, SliderSize, TextStyles};
 use qust_ui::{format, portal_slot};
 use std::rc::Rc;
 
+pub use qust_fluent::Mirror;
+
 /// The seek bar's value is the position in ten-thousandths.
 pub const SEEK_STEPS: i64 = 10000;
-
-/// What a slider shows, kept beside it (see the module docs).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Mirror {
-    pub shown: i64,
-    pub owner: i64,
-    pub dragging: bool,
-}
-
-impl Mirror {
-    pub fn new(value: i64) -> Mirror {
-        Mirror { shown: value, owner: value, dragging: false }
-    }
-
-    /// A value from the player. True when the shown value changed.
-    pub fn owner(&mut self, value: i64) -> bool {
-        if value == self.owner {
-            return false;
-        }
-        self.owner = value;
-        if self.dragging || self.shown == value {
-            return false;
-        }
-        self.shown = value;
-        true
-    }
-
-    pub fn input(&mut self, value: i64) -> bool {
-        let changed = self.shown != value;
-        self.shown = value;
-        changed
-    }
-
-    /// The press that starts a drag.
-    pub fn press(&mut self) {
-        self.dragging = true;
-    }
-
-    /// The commit (end of a drag, or a wheel or key step).
-    pub fn commit(&mut self, value: i64) {
-        self.dragging = false;
-        self.shown = value;
-    }
-}
 
 pub fn volume_icon(value: i64) -> Icon {
     if value == 0 {
@@ -144,7 +99,7 @@ impl SlidersView {
 }
 
 /// A `.slider-row`: icon, slider, value.
-fn row(icon_name: Icon, slider: impl IntoElement, value: String, pair: bool, window: &Window, cx: &gpui::App) -> impl IntoElement {
+fn row(icon_name: Icon, slider: impl IntoElement, value: String, pair: bool, cx: &gpui::App) -> impl IntoElement {
     let theme = theme(cx);
     let (icon_size, value_width, value_size, gap) = if pair { (14.0, 30.0, 11.0, 4.0) } else { (16.0, 34.0, 12.0, 10.0) };
     div()
@@ -156,22 +111,22 @@ fn row(icon_name: Icon, slider: impl IntoElement, value: String, pair: bool, win
         .child(icon(icon_name, icon_size).text_color(theme.text_2))
         .child(slider)
         .child(
+            // Right-aligned in its box, on Chromium's baseline (11/20 sits 1 px low in GPUI's).
             div()
+                .flex()
+                .justify_end()
                 .flex_none()
                 .w(px(value_width))
                 .font_text()
-                .type_size(value_size, 20.0).font_features(crate::text::tabular_kerning())
+                .type_size(value_size, 20.0)
+                .tabular_nums()
                 .text_color(theme.text_2)
-                .text_right()
-                // On Chromium's baseline: 11/20 sits 1 px low in GPUI.
-                .relative()
-                .top(px(crate::text::baseline_shift(value_size, 20.0, false, window)))
-                .child(SharedString::from(value)),
+                .child(line(value)),
         )
 }
 
 impl Render for SlidersView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.renders += 1;
         let theme = *theme(cx);
         let pair = self.seekable;
@@ -179,29 +134,27 @@ impl Render for SlidersView {
         let this = cx.entity().downgrade();
         let size = if pair { SliderSize::Pair } else { SliderSize::Regular };
 
-        let mirror_slider = |id: &'static str, slider: Slider, which: fn(&mut SlidersView) -> &mut Mirror| {
-            let press = this.clone();
-            div().flex_1().min_w_0().child(slider.w_full()).capture_any_mouse_down(move |event: &MouseDownEvent, _, cx| {
-                if event.button == MouseButton::Left {
-                    let _ = press.update(cx, |view, _| which(view).press());
-                }
-            }).id(id)
-        };
+        let slider_box = |id: &'static str, slider: Slider| div().flex_1().min_w_0().child(slider.w_full()).id(id);
 
         let commands = self.shared.commands.clone();
         let input = this.clone();
         let commit = this.clone();
+        let drag = this.clone();
         let volume = Slider::new("volume", levels.volume, 0, 100, "Volume")
             .size(size)
             .focus(&self.volume_focus)
             .forced(forced(cx, "#volumeSlider"))
             .on_input(move |value, _, cx| {
                 let _ = input.update(cx, |view, cx| {
-                    if view.volume.input(value) {
+                    let owner = view.shared.models.levels.read(cx).volume.clamp(0, 100);
+                    if view.volume.input(value, owner) {
                         cx.notify();
                     }
                 });
                 commands.set_volume(value);
+            })
+            .on_drag(move |dragging, _, cx| {
+                let _ = drag.update(cx, |view, _| view.volume.drag(dragging));
             })
             .on_commit(move |value, _, cx| {
                 let _ = commit.update(cx, |view, cx| {
@@ -213,6 +166,7 @@ impl Render for SlidersView {
         let commands = self.shared.commands.clone();
         let input = this.clone();
         let commit = this.clone();
+        let drag = this.clone();
         let balance = Slider::new("balance", levels.balance, -100, 100, "Balance")
             .centered(0)
             .size(size)
@@ -221,11 +175,15 @@ impl Render for SlidersView {
             .forced(forced(cx, "#balanceSlider"))
             .on_input(move |value, _, cx| {
                 let _ = input.update(cx, |view, cx| {
-                    if view.balance.input(value) {
+                    let owner = view.shared.models.levels.read(cx).balance.clamp(-100, 100);
+                    if view.balance.input(value, owner) {
                         cx.notify();
                     }
                 });
                 commands.set_balance(value);
+            })
+            .on_drag(move |dragging, _, cx| {
+                let _ = drag.update(cx, |view, _| view.balance.drag(dragging));
             })
             .on_commit(move |value, _, cx| {
                 let _ = commit.update(cx, |view, cx| {
@@ -234,8 +192,8 @@ impl Render for SlidersView {
                 });
             });
 
-        let volume_row = row(volume_icon(self.volume.shown), mirror_slider("volume-wrap", volume, |v| &mut v.volume), format!("{}%", self.volume.shown), pair, window, cx);
-        let balance_row = row(Icon::Balance, mirror_slider("balance-wrap", balance, |v| &mut v.balance), format::balance(self.balance.shown), pair, window, cx);
+        let volume_row = row(volume_icon(self.volume.shown), slider_box("volume-wrap", volume), format!("{}%", self.volume.shown), pair, cx);
+        let balance_row = row(Icon::Balance, slider_box("balance-wrap", balance), format::balance(self.balance.shown), pair, cx);
         let root = self.shared.root.clone();
 
         surface(Frame::island(&theme))
@@ -290,7 +248,7 @@ impl Render for SeekView {
         let this = cx.entity().downgrade();
         let input = this.clone();
         let commit = this.clone();
-        let press = this.clone();
+        let drag = this.clone();
         let commands = self.shared.commands.clone();
         let models = self.shared.models.clone();
         let slider = Slider::new("seek", value, 0, SEEK_STEPS, "Position")
@@ -300,10 +258,15 @@ impl Render for SeekView {
             .forced(forced(cx, "#seekSlider"))
             .on_input(move |value, _, cx| {
                 let _ = input.update(cx, |view, cx| {
-                    if view.mirror.input(value) {
+                    let seek = view.shared.models.seek.read(cx);
+                    let owner = seek_value(seek.duration, seek.position, seek.seekable);
+                    if view.mirror.input(value, owner) {
                         cx.notify();
                     }
                 });
+            })
+            .on_drag(move |dragging, _, cx| {
+                let _ = drag.update(cx, |view, _| view.mirror.drag(dragging));
             })
             .on_commit(move |value, _, cx| {
                 let _ = commit.update(cx, |view, cx| {
@@ -316,7 +279,6 @@ impl Render for SeekView {
                     commands.seek(value as f64 / SEEK_STEPS as f64 * duration);
                 }
             });
-        let seekable = seek.seekable;
         let position = format::time(self.mirror.shown as f64 / SEEK_STEPS as f64 * duration);
         let total = format::time(duration);
         let text = format!("{position} / {total}");
@@ -326,29 +288,18 @@ impl Render for SeekView {
             .flex()
             .items_center()
             .gap(px(10.0))
+            .child(div().id("seek-wrap").flex_1().min_w_0().child(slider.w_full()))
             .child(
                 div()
-                    .id("seek-wrap")
-                    .flex_1()
-                    .min_w_0()
-                    .child(slider.w_full())
-                    .capture_any_mouse_down(move |event: &MouseDownEvent, _, cx| {
-                        if event.button == MouseButton::Left && seekable {
-                            let _ = press.update(cx, |view, _| view.mirror.press());
-                        }
-                    }),
-            )
-            .child(
-                div()
+                    .flex()
+                    .justify_end()
                     .flex_none()
                     .min_w(px(78.0))
                     .font_text()
                     .type_size(12.0, 20.0)
-                    .font_features(crate::text::tabular_kerning())
+                    .tabular_nums()
                     .text_color(theme.text_2)
-                    .text_right()
-                    .whitespace_nowrap()
-                    .child(gpui::StyledText::new(text).with_highlights([(0..position.len(), bold)])),
+                    .child(line(text).highlight(0..position.len(), bold)),
             )
             .into_any_element()
     }

@@ -64,6 +64,12 @@ pub fn init(cx: &mut gpui::App) {
     gpui_component::init(cx);
     qust_fluent::init(cx);
     cx.set_text_rendering_mode(gpui::TextRenderingMode::Grayscale);
+    // Captures only: `QUST_TEXT_RENDERING=subpixel` draws text with ClearType instead, to compare
+    // with the runs the real WebView2 window drew with ClearType (reference/renders).
+    #[cfg(feature = "capture")]
+    if std::env::var("QUST_TEXT_RENDERING").as_deref() == Ok("subpixel") {
+        cx.set_text_rendering_mode(gpui::TextRenderingMode::Subpixel);
+    }
     let reduced = cx.reduce_motion();
     let mut motion = qust_fluent::motion(cx);
     motion.reduced = reduced;

@@ -21,7 +21,7 @@ use crate::color::Color;
 use crate::motion::{dialog_in, motion, timing};
 use crate::paint::{bounds_probe, css_shadow};
 use crate::surface::{border_layers, inset_layer, Border};
-use crate::text::TextStyles;
+use crate::text::{line, TextStyles};
 use crate::theme::theme;
 use gpui::{
     div, px, AnyElement, App, Div, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
@@ -123,7 +123,7 @@ pub fn dialog_body() -> Div {
 
 /// `.dialog h2`: Display semibold 18/24, 2 px below.
 pub fn dialog_title(text: impl Into<SharedString>, cx: &App) -> Div {
-    div().font_display().semibold().type_size(18.0, 24.0).mb(px(2.0)).text_color(theme(cx).text).child(text.into())
+    div().font_display().semibold().type_size(18.0, 24.0).mb(px(2.0)).text_color(theme(cx).text).child(line(text))
 }
 
 /// `.field`: the label (13/18 `--text`) over the text box, gap 4.
@@ -135,11 +135,11 @@ pub fn field(label: impl Into<SharedString>, textbox: impl IntoElement, cx: &App
         .font_text()
         .type_size(13.0, 18.0)
         .text_color(theme(cx).text)
-        .child(div().child(label.into()))
+        .child(div().child(line(label)))
         .child(textbox)
 }
 
-/// `.dialog-error`: 12/16 `--error`.
+/// `.dialog-error`: 12/16 `--error` (it may wrap; 12/16 needs no baseline correction).
 pub fn dialog_error(text: impl Into<SharedString>, cx: &App) -> Div {
     div().font_text().type_size(12.0, 16.0).text_color(theme(cx).error).child(text.into())
 }

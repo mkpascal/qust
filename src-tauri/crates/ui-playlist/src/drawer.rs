@@ -16,7 +16,8 @@
 //! which is why it keeps them few.
 //!
 //! **The playing row's equalizer** animates at the frame rate. Mounted with [`mount`], it is
-//! drawn by [`EqualizerLayer`], a sibling live layer, and this view never re-renders for it.
+//! drawn by a `qust_fluent::EqualizerLayer`, a sibling live layer, and this view never
+//! re-renders for it.
 //! Without the layer it is drawn here, and then this view re-renders every frame while the
 //! playing row is on screen. Either way it stands still while the drawer is closed.
 //!
@@ -39,8 +40,9 @@ use gpui::{
     IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, Role, ScrollDelta, ScrollEvent,
     AppContext, SharedString, StatefulInteractiveElement, Styled, WeakEntity, Window,
 };
-use crate::text;
-use qust_fluent::{focus, icon, list as row_ui, motion, surface, theme, Forced, Frame, Icon, TextStyles, Theme, TooltipExt};
+use qust_fluent::equalizer::{EqualizerLayer, EqualizerPlacement};
+use qust_fluent::scrollbar::{self, ScrollbarKind};
+use qust_fluent::{focus, icon, line, list as row_ui, motion, surface, theme, Forced, Frame, Icon, TextStyles, Theme, TooltipExt};
 use qust_ui::models::{Deck, PlaylistModel};
 use qust_ui::{portal_slot, Models, WindowRoot};
 use std::cell::Cell;
@@ -56,25 +58,21 @@ pub const HEIGHT: f32 = 320.0;
 const ISLAND_HEIGHT: f32 = 284.0;
 /// `::-webkit-scrollbar { width: 10px }`, thumb inside a 3 px transparent border.
 const SCROLLBAR: f32 = 10.0;
-const THUMB_BORDER: f32 = 3.0;
 /// Chromium's wheel: 100 px per notch with the default three lines per notch.
 const WHEEL_LINE: f32 = 100.0 / 3.0;
-/// Chromium's page step for a scrollbar track press: 87.5 % of the viewport, whole px.
-const PAGE_STEP: f32 = 246.0;
-/// Chromium's scrollbar autoscroll: first repeat after 250 ms, then every 50 ms.
-const TRACK_REPEAT_FIRST: Duration = Duration::from_millis(250);
-const TRACK_REPEAT: Duration = Duration::from_millis(50);
 pub const HINT: &str = "Double-click to play \u{b7} drag to reorder \u{b7} Delete to remove";
 pub const EMPTY_TITLE: &str = "Drop music files or folders here";
 pub const EMPTY_TEXT: &str = "or use Add file and Add URL. Files play from where they are.";
 
-/// A pinned cartridge as its row shows it.
+/// A pinned cartridge as its row shows it (`shown_*`: what it draws, `qust_text::shown`).
 #[derive(Clone, Debug, PartialEq)]
 struct Pinned {
     slot: usize,
     title: SharedString,
     url: SharedString,
     host: SharedString,
+    shown_title: SharedString,
+    shown_host: SharedString,
 }
 
 /// A left press on the list, until its release decides the click.
@@ -147,6 +145,9 @@ pub struct Drawer {
     geometry: Rc<Cell<Option<Rect>>>,
     /// Entry versions of the rows last rendered (a `player-entry` re-renders only if one moved).
     shown: HashMap<u64, u64>,
+    /// What an entry's row draws (title, detail through `qust_text::shown`), by id, with the
+    /// entry version it was computed for; emptied by every rebuild.
+    display: HashMap<u64, (u64, SharedString, SharedString)>,
     forced_hover: HashSet<Item>,
     /// The playing row's equalizer is drawn by an [`EqualizerLayer`] (see [`mount`]).
     equalizer_layer: bool,
@@ -198,6 +199,7 @@ impl Drawer {
             track_generation: 0,
             geometry: Rc::new(Cell::new(None)),
             shown: HashMap::new(),
+            display: HashMap::new(),
             forced_hover: HashSet::new(),
             equalizer_layer: false,
             root: None,
@@ -355,7 +357,10 @@ impl Drawer {
             .iter()
             .enumerate()
             .filter_map(|(slot, cartridge)| {
-                cartridge.as_ref().map(|c| Pinned { slot, title: c.title.clone().into(), url: c.url.clone().into(), host: list::host(&c.url).into() })
+                cartridge.as_ref().map(|c| {
+                    let host = list::host(&c.url);
+                    Pinned { slot, title: c.title.clone().into(), url: c.url.clone().into(), shown_title: qust_text::shown(&c.title).into(), shown_host: qust_text::shown(&host).into(), host: host.into() }
+                })
             })
             .collect();
         let active = match deck.active_slot {
@@ -391,6 +396,7 @@ impl Drawer {
             self.version = Some(model.version);
             self.rows.set_ids(model.entries.iter().map(|e| e.id).collect());
             self.total = total;
+            self.display.clear();
             self.rebuilt();
             self.show_added();
             return true;
@@ -474,19 +480,9 @@ impl Drawer {
         self.rows.scrolls() && x >= list.right() - 1.0 - SCROLLBAR && x < list.right() - 1.0 && y >= list.top + 1.0 && y < list.bottom() - 1.0
     }
 
-    // The thumb's (top, length) on the 282 px track, in whole px as Chromium's ScrollbarTheme
-    // computes them: the length rounded (at least the bar's width), the position truncated
-    // (1 rather than 0 once scrolled at all).
+    // The thumb's (top, length) on the 282 px track, as Chromium's ScrollbarTheme computes them.
     fn thumb_span(&self) -> Option<(f32, f32)> {
-        let content = self.rows.content_height();
-        if content <= CLIENT_HEIGHT {
-            return None;
-        }
-        let track = CLIENT_HEIGHT;
-        let length = (track * CLIENT_HEIGHT / content).round().max(SCROLLBAR).min(track);
-        let position = self.scroll.max(0.0) * (track - length) / self.rows.max_scroll();
-        let start = if position > 0.0 && position < 1.0 { 1.0 } else { position.floor() };
-        Some((start, length))
+        scrollbar::thumb_span(CLIENT_HEIGHT, CLIENT_HEIGHT, self.rows.content_height(), self.scroll, SCROLLBAR)
     }
 
     fn open_self(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -573,10 +569,10 @@ impl Drawer {
         self.track = Some(TrackPress { direction, y, generation });
         self.page(direction, cx);
         cx.spawn(async move |this, cx| {
-            let mut delay = TRACK_REPEAT_FIRST;
+            let mut delay = scrollbar::TRACK_REPEAT_FIRST;
             loop {
                 cx.background_executor().timer(delay).await;
-                delay = TRACK_REPEAT;
+                delay = scrollbar::TRACK_REPEAT;
                 let more = this.update(cx, |drawer, cx| {
                     let Some(track) = drawer.track.filter(|t| t.generation == generation) else { return false };
                     // Repeat while the thumb hasn't reached the pointer.
@@ -597,7 +593,7 @@ impl Drawer {
     }
 
     fn page(&mut self, direction: f32, cx: &mut Context<Self>) {
-        let next = (self.scroll + direction * PAGE_STEP).clamp(0.0, self.rows.max_scroll());
+        let next = (self.scroll + direction * scrollbar::page_step(CLIENT_HEIGHT)).clamp(0.0, self.rows.max_scroll());
         if next != self.scroll {
             self.scroll = next;
             cx.notify();
@@ -609,8 +605,7 @@ impl Drawer {
         let y = event.position.y.as_f32();
         if let Some(thumb) = self.thumb {
             let Some((_, length)) = self.thumb_span() else { return };
-            let room = (CLIENT_HEIGHT - length).max(1.0);
-            let next = (thumb.scroll + (y - thumb.y) * self.rows.max_scroll() / room).clamp(0.0, self.rows.max_scroll());
+            let next = scrollbar::dragged_offset(thumb.scroll, y - thumb.y, CLIENT_HEIGHT, length, self.rows.max_scroll());
             if next != self.scroll {
                 self.scroll = next;
                 cx.notify();
@@ -822,37 +817,46 @@ impl Drawer {
 
     // --- Rendering -------------------------------------------------------------------------------
 
-    // One row. Its displayed strings (title, detail) are computed here and only here, for the
-    // rows on screen (the place for `qust_text::shown` when right-to-left titles get their fix).
-    fn row_element(&mut self, row: usize, theme: &Theme, model: &PlaylistModel, equalizer: RowEqualizer, window: &Window) -> Option<AnyElement> {
+    // One row, for the rows on screen. What it draws of the title and detail comes from the
+    // pinned cartridge or the `display` cache (`qust_text::shown`, computed when they change).
+    fn row_element(&mut self, row: usize, theme: &Theme, model: &PlaylistModel, equalizer: RowEqualizer) -> Option<AnyElement> {
         let item = self.rows.item(row)?;
         let selected = self.selection.contains(item);
         let active = self.active == Some(item);
         let playing = active && self.playing;
         let forced = if self.forced_hover.contains(&item) { Forced::HOVER } else { Forced::NONE };
-        let (id, title, detail, tooltip, missing): (gpui::ElementId, SharedString, SharedString, SharedString, bool) = match item {
+        let (id, label, title, detail, tooltip, missing): (gpui::ElementId, SharedString, SharedString, SharedString, SharedString, bool) = match item {
             Item::Cartridge(slot) => {
                 let pinned = self.pinned.iter().find(|p| p.slot == slot)?;
-                (("cartridge", slot).into(), pinned.title.clone(), pinned.host.clone(), pinned.url.clone(), false)
+                (("cartridge", slot).into(), pinned.title.clone(), pinned.shown_title.clone(), pinned.shown_host.clone(), pinned.url.clone(), false)
             }
             Item::Entry(id) => {
                 let entry = model.entries.get(self.rows.entry_index(id)?)?;
-                self.shown.insert(id, model.entry_versions.get(&id).copied().unwrap_or(0));
+                let version = model.entry_versions.get(&id).copied().unwrap_or(0);
+                self.shown.insert(id, version);
+                let (title, detail) = match self.display.get(&id) {
+                    Some((v, title, detail)) if *v == version => (title.clone(), detail.clone()),
+                    _ => {
+                        let title: SharedString = qust_text::shown(&entry.title).into();
+                        let detail: SharedString = qust_text::shown(&list::entry_detail(entry.duration, entry.url.as_deref())).into();
+                        self.display.insert(id, (version, title.clone(), detail.clone()));
+                        (title, detail)
+                    }
+                };
                 let tooltip = entry.path.clone().filter(|p| !p.is_empty()).or_else(|| entry.url.clone()).unwrap_or_default();
-                (("entry", id).into(), entry.title.clone().into(), list::entry_detail(entry.duration, entry.url.as_deref()).into(), tooltip.into(), entry.missing)
+                (("entry", id).into(), entry.title.clone().into(), title, detail, tooltip.into(), entry.missing)
             }
         };
         let open = self.open;
-        let number = row_ui::row_number(active, !item.is_track(), theme).font_features(text::tabular_kerning());
+        let number = row_ui::row_number(active, !item.is_track(), theme);
         let number = match (playing, equalizer, item) {
             // `.row.is-playing`: the equalizer replaces the number (or the radio icon).
-            (true, RowEqualizer::Inline(elapsed), _) => number.child(equalizer_bars(elapsed, theme.accent).mr(px(2.0))),
+            (true, RowEqualizer::Inline(elapsed), _) => number.child(qust_fluent::equalizer::equalizer(elapsed, theme.accent).mr(px(2.0))),
             // Drawn by the equalizer layer over this box.
             (true, RowEqualizer::Layer, _) => number.child(div().w(px(10.0)).h(px(10.0)).mr(px(2.0))),
             (_, _, Item::Cartridge(slot)) => {
-                // `.row.is-cartridge .row-number` (text-2) comes after `.row.is-active
-                // .row-number` (accent) in style.css: the icon stays text-2 on the active row.
-                // It sits at the top of its 18 px line box, as the inline SVG did.
+                // The icon is text-2 on the active row too (`row_number`). It sits at the top
+                // of its 18 px line box, as the inline SVG did.
                 number.child(
                     div()
                         .id(("cartridge-icon", slot))
@@ -862,7 +866,7 @@ impl Drawer {
                         .child(icon(Icon::Radio, 14.0).text_color(theme.text_2)),
                 )
             }
-            (_, _, Item::Entry(_)) => number.child(SharedString::from(format!("{}", row + 1 - self.rows.pinned().len()))),
+            (_, _, Item::Entry(_)) => number.child(line(format!("{}", row + 1 - self.rows.pinned().len()))),
         };
         let top = self.rows.row_top(row) - self.scroll_px();
         let reordering = self.is_reordering();
@@ -873,22 +877,6 @@ impl Drawer {
             Item::Cartridge(slot) if !playing => Some(slot),
             _ => None,
         };
-        // `.row-title` and `.row-detail`, cut with Chromium's ellipsis. The detail is as wide as
-        // its text, at most 40 % of the row's content box (the row less its 4 + 10 px padding).
-        let title_style = text::LineStyle {
-            weight: if active { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL },
-            features: text::kerning(),
-            size: 13.0,
-            line: 18.0,
-            color: if missing { theme.text_disabled } else if active { theme.accent } else { theme.text },
-            strikethrough: missing,
-            max_width: None,
-        };
-        let detail_max = 0.4 * (self.content_width() - 2.0 * PADDING - 14.0);
-        let detail_style =
-            text::LineStyle { weight: gpui::FontWeight::NORMAL, features: text::tabular_kerning(), size: 12.0, line: 18.0, color: theme.text_3, strikethrough: false, max_width: Some(detail_max) };
-        // Whole px (GPUI rounds authored lengths): up, the text set against the right edge.
-        let detail_width = if detail.is_empty() { 0.0 } else { text::line_width(&detail, &detail_style, window).min(detail_max).ceil() };
         self.stats.rows_built += 1;
         Some(
             row_ui::row(id, selected, forced, theme)
@@ -896,17 +884,13 @@ impl Drawer {
                 .top(px(top))
                 .left(px(PADDING))
                 .right(px(PADDING))
-                .when(open, |r| r.role(Role::ListBoxOption).aria_selected(selected).aria_label(title.clone()))
+                .when(open, |r| r.role(Role::ListBoxOption).aria_selected(selected).aria_label(label))
                 .when(open && reordering, |r| r.cursor(CursorStyle::ClosedHand))
                 .child(number)
-                .child(div().flex_1().min_w_0().h(px(18.0)).child(text::truncated_line(title, title_style)))
-                .child(
-                    div()
-                        .flex_none()
-                        .w(px(detail_width))
-                        .h(px(if detail.is_empty() { 0.0 } else { 18.0 }))
-                        .when(!detail.is_empty(), |d| d.child(text::truncated_line(detail, detail_style))),
-                )
+                // `.row-title` and `.row-detail` (at most 40 % of the row), cut with Chromium's
+                // ellipsis.
+                .child(row_ui::row_title(title, active, missing, theme))
+                .when(!detail.is_empty(), |r| r.child(row_ui::row_detail(detail, theme)))
                 .when(open, |r| match icon_tooltip {
                     Some(slot) => r.children(around_icon(slot, tooltip)),
                     None => r.native_tooltip(tooltip),
@@ -917,7 +901,7 @@ impl Drawer {
 
     /// Where the playing row's equalizer goes, when that row is on screen: its 10 × 10 box and
     /// the list's viewport (its clip) in window coordinates, when it started, and whether it
-    /// animates (not while the drawer is closed). For [`EqualizerLayer`].
+    /// animates (not while the drawer is closed). For the [`EqualizerLayer`].
     pub fn equalizer_placement(&self) -> Option<EqualizerPlacement> {
         let row = self.active.filter(|_| self.playing).and_then(|item| self.rows.row_of(item))?;
         let scroll = self.scroll_px();
@@ -930,7 +914,14 @@ impl Drawer {
         // centred in the 26 px row.
         let left = viewport.left + PADDING + 4.0 + 34.0 - 2.0 - 10.0;
         let top = viewport.top + self.rows.row_top(row) - scroll + 8.0;
-        Some(EqualizerPlacement { bars: Rect { left, top, width: 10.0, height: 10.0 }, clip: viewport, started: self.eq_started, animate: self.open })
+        let bounds = |r: Rect| gpui::Bounds::new(gpui::point(px(r.left), px(r.top)), gpui::size(px(r.width), px(r.height)));
+        Some(EqualizerPlacement {
+            bars: bounds(Rect { left, top, width: 10.0, height: 10.0 }),
+            clip: Some(bounds(viewport)),
+            started: self.eq_started,
+            animate: self.open,
+            color: None,
+        })
     }
 
     fn list_contents(&mut self, window: &mut Window, cx: &mut Context<Self>, theme: &Theme) -> Vec<AnyElement> {
@@ -957,7 +948,7 @@ impl Drawer {
         self.shown.clear();
         let mut children: Vec<AnyElement> = Vec::with_capacity(visible.len() + 3);
         for row in visible {
-            if let Some(element) = self.row_element(row, theme, model, equalizer, window) {
+            if let Some(element) = self.row_element(row, theme, model, equalizer) {
                 children.push(element);
             }
         }
@@ -1006,18 +997,9 @@ impl Drawer {
 
     fn scrollbar(&self, theme: &Theme) -> impl IntoElement {
         let thumb = self.thumb_span();
+        let color = theme.text_3;
         div().relative().w(px(SCROLLBAR)).h_full().flex_none().when_some(thumb, |bar, (start, length)| {
-            // `background: var(--text-3) padding-box` inside a 3 px transparent border, radius 5.
-            bar.child(
-                div()
-                    .absolute()
-                    .top(px(start + THUMB_BORDER))
-                    .left(px(THUMB_BORDER))
-                    .w(px(SCROLLBAR - 2.0 * THUMB_BORDER))
-                    .h(px((length - 2.0 * THUMB_BORDER).max(0.0)))
-                    .rounded(px(5.0 - THUMB_BORDER))
-                    .bg(theme.text_3),
-            )
+            bar.child(canvas(|_, _, _| {}, move |bounds, _, window, _| scrollbar::paint_thumb(bounds, ScrollbarKind::Playlist, start, length, color, window)).size_full())
         })
     }
 
@@ -1135,8 +1117,7 @@ impl Render for Drawer {
                     .on_key_down(cx.listener(Self::key_down))
             });
 
-        // 11/16 text sits 1 px lower in GPUI than in Chromium (see `text`).
-        let status_shift = text::baseline_shift(11.0, 16.0, cx);
+        // Single lines (Chromium's baseline: 11/16 sits 1 px lower in GPUI's own).
         let status_line = div()
             .h(px(16.0))
             .flex_none()
@@ -1148,15 +1129,14 @@ impl Render for Drawer {
             .type_size(11.0, 16.0)
             .text_color(theme.text_3)
             .whitespace_nowrap()
-            .child(div().relative().top(px(status_shift)).text_color(theme.text_2).font_features(text::tabular_kerning()).child(SharedString::from(status)))
-            .child(div().relative().top(px(status_shift)).child(HINT));
+            .child(line(status).text_color(theme.text_2).tabular_nums())
+            .child(line(HINT));
 
         div()
             .id("drawer")
             .relative()
             .size_full()
             .font_text()
-            .font_features(text::kerning())
             .type_size(14.0, 20.0)
             .text_color(theme.text)
             .on_drag_move::<ExternalPaths>(cx.listener(Self::external_move))
@@ -1167,7 +1147,7 @@ impl Render for Drawer {
     }
 }
 
-/// How the playing row's equalizer is drawn this render.
+/// How the playing row's equalizer is drawn this render (without the layer: here).
 #[derive(Clone, Copy, Debug)]
 enum RowEqualizer {
     /// Here, after this much of its animation (None: reduced motion, full height).
@@ -1176,78 +1156,12 @@ enum RowEqualizer {
     Layer,
 }
 
-/// The playing row's equalizer box, for the layer.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct EqualizerPlacement {
-    /// The 10 × 10 box, window coordinates.
-    pub bars: Rect,
-    /// The list's viewport: the bars are clipped to it as the row is.
-    pub clip: Rect,
-    pub started: Instant,
-    /// Animating (the drawer is open).
-    pub animate: bool,
-}
-
-/// `.row-eq`: three bars 2 × 10, gap 2, radius 1, each scaled from the bottom (fluent's
-/// `equalizer`, drawn here for the inline case).
-fn equalizer_bars(elapsed: Option<Duration>, color: qust_fluent::Color) -> gpui::Div {
-    qust_fluent::equalizer::equalizer(elapsed, color)
-}
-
-/// The playing row's equalizer as a live layer of the window root: it animates at the frame
-/// rate, and as a sibling of the drawer (not a descendant) its frames re-render only itself,
-/// never the drawer's rows (GPUI re-renders every ancestor of a view that notifies). It reads its
-/// place from the drawer, re-renders when the drawer does (it observes it), and paints at window
-/// coordinates clipped to the list, so where the root puts its container doesn't matter.
-pub struct EqualizerLayer {
-    drawer: Entity<Drawer>,
-    /// Renders (measurements and tests).
-    pub renders: u64,
-}
-
-impl EqualizerLayer {
-    pub fn new(drawer: &Entity<Drawer>, cx: &mut Context<Self>) -> EqualizerLayer {
-        cx.observe(drawer, |_, _, cx| cx.notify()).detach();
-        EqualizerLayer { drawer: drawer.clone(), renders: 0 }
-    }
-}
-
-impl Render for EqualizerLayer {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.renders += 1;
-        let placement = self.drawer.read(cx).equalizer_placement();
-        let color = theme(cx).accent;
-        let motion = motion(cx);
-        let elapsed = placement.map(|p| if motion.reduced { None } else { Some(motion.elapsed(p.started, None)) });
-        if placement.is_some_and(|p| p.animate) && !motion.reduced && motion.wants_frames() {
-            window.request_animation_frame();
-        }
-        canvas(
-            |_, _, _| {},
-            move |_, _, window, _| {
-                let (Some(p), Some(elapsed)) = (placement, elapsed) else { return };
-                let clip = gpui::Bounds::new(gpui::point(px(p.clip.left), px(p.clip.top)), gpui::size(px(p.clip.width), px(p.clip.height)));
-                window.with_content_mask(Some(gpui::ContentMask { bounds: clip }), |window| {
-                    for bar in 0..3 {
-                        // Fluent's bars: the height scaled, standing on the bottom.
-                        let scale = elapsed.map_or(1.0, |elapsed| qust_fluent::motion::equalizer_scale(elapsed, bar)) as f32;
-                        let height = (10.0 * scale).round();
-                        let bounds = gpui::Bounds::new(gpui::point(px(p.bars.left + 4.0 * bar as f32), px(p.bars.top + 10.0 - height)), gpui::size(px(2.0), px(height)));
-                        window.paint_quad(gpui::fill(bounds, color).corner_radii(px(1.0)));
-                    }
-                });
-            },
-        )
-        .size_full()
-    }
-}
-
 /// Mounts the drawer the way it is meant to live: as a live layer of the window root (drawn at
 /// the 860 × 320 slot `"drawer"`, which the player's content places at y = 267), with the
 /// playing row's equalizer as a second live layer above it (its slot is inside the drawer).
 /// Returns the layer.
 pub fn mount(drawer: &Entity<Drawer>, root: &Entity<WindowRoot>, cx: &mut App) -> Entity<EqualizerLayer> {
-    let layer = cx.new(|cx| EqualizerLayer::new(drawer, cx));
+    let layer = cx.new(|cx| EqualizerLayer::new(drawer, |drawer: &Drawer, _| drawer.equalizer_placement(), cx));
     let weak = root.downgrade();
     drawer.update(cx, |drawer, cx| {
         drawer.equalizer_layer = true;

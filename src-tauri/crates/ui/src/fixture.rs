@@ -243,8 +243,13 @@ impl Fixture {
     }
 
     /// The reference render for a variant, theme and scale.
+    ///
+    /// The render set is `reference/renders/` (ClearType text, as headless Edge drew it), or the
+    /// one `QUST_REFERENCE_SET` names: `renders-gray` has the same states with grayscale text,
+    /// which is what the real window drew for most runs (the capture examples' `--gray`).
     pub fn render_path(&self, variant: &str, theme: &str, scale: f32) -> PathBuf {
-        reference_dir().join("renders").join(&self.window).join(format!("{variant}.{theme}@{}.png", scale_name(scale)))
+        let set = std::env::var("QUST_REFERENCE_SET").ok().filter(|s| !s.is_empty() && !s.contains(['/', '\\', '.'])).unwrap_or_else(|| "renders".into());
+        reference_dir().join(set).join(&self.window).join(format!("{variant}.{theme}@{}.png", scale_name(scale)))
     }
 
     /// Puts the fixture into the models, as the live player would have.

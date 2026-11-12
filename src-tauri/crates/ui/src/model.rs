@@ -285,20 +285,156 @@ pub mod format {
         format!("{rounded:.digits$}")
     }
 
-    /// `new URL(url).host`: the host with the port unless it is the scheme's default.
+    /// The player's `host(url)` (script.js): `new URL(url).host`, or the text itself when it
+    /// isn't a URL (the cartridge host line and the playlist's detail).
     pub fn host(url: &str) -> String {
-        let Some((scheme, rest)) = url.split_once("://") else { return String::new() };
-        let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-        let authority = authority.rsplit('@').next().unwrap_or(authority).to_ascii_lowercase();
-        let default = match scheme.to_ascii_lowercase().as_str() {
-            "http" => Some(":80"),
-            "https" => Some(":443"),
+        url_host(url).unwrap_or_else(|| url.to_string())
+    }
+
+    /// `new URL(url).host`, None where the constructor throws (info.js shows "—" then): the
+    /// host, lowercased and with internationalized labels in their punycode form for the special
+    /// schemes (`http://Bücher.example` → `xn--bcher-kva.example`), and the port unless it is
+    /// the scheme's default. A Windows path parses as a URL with a one-letter scheme and no host
+    /// (`""`), as in the browser.
+    pub fn url_host(url: &str) -> Option<String> {
+        let url = url.trim_matches(|c: char| c <= ' ');
+        let colon = url.find(':')?;
+        let scheme = &url[..colon];
+        let mut chars = scheme.chars();
+        if !chars.next().is_some_and(|c| c.is_ascii_alphabetic()) || !chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.')) {
+            return None;
+        }
+        let scheme = scheme.to_ascii_lowercase();
+        let default_port = match scheme.as_str() {
+            "http" | "ws" => Some(80),
+            "https" | "wss" => Some(443),
+            "ftp" => Some(21),
+            "file" => Some(0),
             _ => None,
         };
-        match default {
-            Some(port) if authority.ends_with(port) => authority[..authority.len() - port.len()].to_string(),
-            _ => authority,
+        let special = default_port.is_some();
+        let rest = &url[colon + 1..];
+        let authority_start = if special {
+            // Special schemes ignore any number of slashes and backslashes.
+            rest.trim_start_matches(['/', '\\'])
+        } else if let Some(after) = rest.strip_prefix("//") {
+            after
+        } else {
+            return Some(String::new());
+        };
+        let end = authority_start.find(|c: char| matches!(c, '/' | '?' | '#') || (special && c == '\\')).unwrap_or(authority_start.len());
+        let authority = &authority_start[..end];
+        let authority = authority.rsplit('@').next().unwrap_or(authority);
+        // host[:port], an IPv6 address in brackets.
+        let (host, port) = if authority.starts_with('[') {
+            let close = authority.find(']')?;
+            (&authority[..=close], authority[close + 1..].strip_prefix(':'))
+        } else {
+            match authority.rfind(':') {
+                Some(i) => (&authority[..i], Some(&authority[i + 1..])),
+                None => (authority, None),
+            }
+        };
+        let port = match port.filter(|p| !p.is_empty()) {
+            Some(p) if p.chars().all(|c| c.is_ascii_digit()) => Some(p.parse::<u32>().ok().filter(|p| *p <= 65535)?),
+            Some(_) => return None,
+            None => None,
+        };
+        if scheme == "file" {
+            return Some(String::new());
         }
+        let host = if special {
+            if host.is_empty() {
+                return None;
+            }
+            domain_to_ascii(host)?
+        } else {
+            host.to_string()
+        };
+        Some(match port {
+            Some(p) if Some(p) != default_port => format!("{host}:{p}"),
+            _ => host,
+        })
+    }
+
+    /// The URL standard's domain to ASCII for the hosts streams use: lowercased, each label with
+    /// non-ASCII characters in punycode (`xn--`). (No full UTS #46 mapping: width and
+    /// compatibility forms stay as typed.)
+    fn domain_to_ascii(host: &str) -> Option<String> {
+        if host.starts_with('[') {
+            return Some(host.to_ascii_lowercase());
+        }
+        let lower = host.to_lowercase();
+        let labels: Option<Vec<String>> = lower
+            .split(['.', '\u{3002}', '\u{ff0e}', '\u{ff61}'])
+            .map(|label| if label.is_ascii() { Some(label.to_string()) } else { punycode(label).map(|p| format!("xn--{p}")) })
+            .collect();
+        let host = labels?.join(".");
+        // Forbidden host code points.
+        if host.chars().any(|c| matches!(c, ' ' | '#' | '%' | '/' | ':' | '<' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '|')) {
+            return None;
+        }
+        Some(host)
+    }
+
+    /// RFC 3492 punycode of one label.
+    fn punycode(input: &str) -> Option<String> {
+        const BASE: u32 = 36;
+        const T_MIN: u32 = 1;
+        const T_MAX: u32 = 26;
+        const SKEW: u32 = 38;
+        const DAMP: u32 = 700;
+        fn adapt(mut delta: u32, points: u32, first: bool) -> u32 {
+            delta /= if first { DAMP } else { 2 };
+            delta += delta / points;
+            let mut k = 0;
+            while delta > ((BASE - T_MIN) * T_MAX) / 2 {
+                delta /= BASE - T_MIN;
+                k += BASE;
+            }
+            k + (BASE - T_MIN + 1) * delta / (delta + SKEW)
+        }
+        fn digit(d: u32) -> char {
+            (if d < 26 { b'a' + d as u8 } else { b'0' + (d - 26) as u8 }) as char
+        }
+        let code_points: Vec<u32> = input.chars().map(|c| c as u32).collect();
+        let mut output: String = input.chars().filter(|c| c.is_ascii()).collect();
+        let basic = output.len() as u32;
+        let mut handled = basic;
+        if basic > 0 {
+            output.push('-');
+        }
+        let (mut n, mut delta, mut bias) = (128u32, 0u32, 72u32);
+        while (handled as usize) < code_points.len() {
+            let m = code_points.iter().copied().filter(|&c| c >= n).min()?;
+            delta = delta.checked_add((m - n).checked_mul(handled + 1)?)?;
+            n = m;
+            for &c in &code_points {
+                if c < n {
+                    delta = delta.checked_add(1)?;
+                }
+                if c == n {
+                    let mut q = delta;
+                    let mut k = BASE;
+                    loop {
+                        let t = if k <= bias { T_MIN } else if k >= bias + T_MAX { T_MAX } else { k - bias };
+                        if q < t {
+                            break;
+                        }
+                        output.push(digit(t + (q - t) % (BASE - t)));
+                        q = (q - t) / (BASE - t);
+                        k += BASE;
+                    }
+                    output.push(digit(q));
+                    bias = adapt(delta, handled + 1, handled == basic);
+                    delta = 0;
+                    handled += 1;
+                }
+            }
+            delta += 1;
+            n += 1;
+        }
+        Some(output)
     }
 
     /// The balance label: "C" at 0, "L N" left, "R N" right.
@@ -344,6 +480,24 @@ mod tests {
         assert_eq!(khz(48000.0), "48");
         assert_eq!(host("https://kexp-mp3-128.streamguys1.com:8443/kexp128.mp3"), "kexp-mp3-128.streamguys1.com:8443");
         assert_eq!(host("https://example.com:443/live"), "example.com");
+        // As `new URL(url).host` (checked against Node): punycode, default ports, non-URLs.
+        assert_eq!(host("http://Bücher.example:80/x"), "xn--bcher-kva.example");
+        assert_eq!(host("https://www.例え.jp:8443/x"), "www.xn--r8jz45g.jp:8443");
+        assert_eq!(host("https://straße.de/"), "xn--strae-oqa.de");
+        assert_eq!(host("http://ÉCOLE.fr"), "xn--cole-9oa.fr");
+        assert_eq!(host("http://user:pw@HOST.com:8000/"), "host.com:8000");
+        assert_eq!(host("rtsp://x.com:554/"), "x.com:554");
+        assert_eq!(host("http://[::1]:8080/"), "[::1]:8080");
+        assert_eq!(host("ftp://x.com:21/"), "x.com");
+        assert_eq!(host("http://a.com:/x"), "a.com");
+        assert_eq!(host("HTTP://EXAMPLE.COM:0080/"), "example.com");
+        assert_eq!(host("http://xn--bcher-kva.example/"), "xn--bcher-kva.example");
+        assert_eq!(host("foo"), "foo");
+        assert_eq!(host("/home/a.mp3"), "/home/a.mp3");
+        assert_eq!(host("C:\\Music\\a.mp3"), "");
+        assert_eq!(url_host("foo"), None);
+        assert_eq!(url_host("http://"), None);
+        assert_eq!(url_host("C:\\Music\\a.mp3").as_deref(), Some(""));
         assert_eq!(balance(-30), "L 30");
         assert_eq!(ago(100, 130), "just now");
         assert_eq!(ago(0, 86400), "1 days ago");

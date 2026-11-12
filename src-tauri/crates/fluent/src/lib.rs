@@ -42,14 +42,15 @@
 //! follows Chromium's `:focus-visible` rule ([`focus::is_focus_visible`]), not GPUI's.
 //! Dialogs keep Tab inside with [`focus::FocusCycle`].
 //!
-//! **Frequent updates.** GPUI marks a view and all its ancestor views dirty when it notifies,
-//! and re-renders every dirty view; views embedded with `.cached(style)` and not dirty are
-//! replayed from the last frame without re-rendering. So:
-//! - whatever changes often lives in its own small view, embedded with `.cached(..)` at a size
-//!   its parent decides (`w_full()`, a fixed size, `flex_1()`; never "as big as my content"):
-//!   the analyzer (60 Hz), the marquee, the equalizers, the clock (1 Hz);
-//! - every ancestor of such a view is thin: a frame and a few cached child views, so its own
-//!   re-render (once per frame of a descendant) costs almost nothing;
+//! **Frequent updates.** GPUI marks a view and all its ancestor views dirty when it notifies
+//! (or asks for the next frame), and a dirty view re-renders its whole subtree, cached child
+//! views included; views embedded with `.cached(style)` that aren't dirty are replayed from the
+//! last frame. So an animating view must not be a descendant of the window's content:
+//! - whatever changes often (the analyzer at 60 Hz, the marquee, the equalizers, the clock) is
+//!   a **live layer**: a small view the window root (`qust_ui::WindowRoot`) draws as a sibling
+//!   of the content, at the place of a slot the content leaves for it, or at window coordinates
+//!   it reads from its owner ([`equalizer::EqualizerLayer`]);
+//! - the content and every view in it re-render only when what they show changed;
 //! - a view observes only the model entities it renders (`cx.observe(&model, |_, _, cx|
 //!   cx.notify())`); `qust_ui` splits the player's state into small models for that.
 //! - an animation asks for the next frame only while something moves; holds and frozen
@@ -64,7 +65,13 @@
 //! sigma, half the CSS blur ([`paint::css_shadow`]); content masks are rectangles (rounded
 //! clipping needs rounded children); hover styles are suppressed while the last input was the
 //! keyboard; keyboard clicks fire on key-up; GPUI has no transforms on divs (the dialog's
-//! opening scale is applied to its frame only).
+//! opening scale is applied to its frame only); GPUI applies opacity per primitive, not per
+//! group ([`paint::Fade`]); GPUI snaps halves toward zero where Chromium rounds them up
+//! ([`paint::snap_half_up`]).
+//!
+//! **Text** is laid out as Chromium laid it out where GPUI differs (kerning, baseline, ellipsis,
+//! letter-spacing, fallback fonts): see [`text`]. Put single-line text in a [`text::Line`]
+//! (`line(t)`), which inherits the text style like a string child.
 
 pub mod a11y;
 pub mod analyzer;
@@ -96,15 +103,16 @@ pub use button::{Button, ButtonKind};
 pub use color::Color;
 pub use combo::{shortcut_keys, Combo, ShortcutBox, ShortcutDisplay};
 pub use dialog::DialogCard;
-pub use equalizer::EqualizerView;
-pub use icons::{icon, Assets, Icon};
+pub use equalizer::{EqualizerLayer, EqualizerPlacement, EqualizerView};
+pub use icons::{icon, rotated_icon, Assets, Icon};
 pub use marquee::Marquee;
 pub use motion::{motion, Motion};
-pub use slider::{Slider, SliderSize};
+pub use slider::{Mirror, Slider, SliderSize};
 pub use state::Forced;
-pub use surface::{focus_ring, surface, Border, Frame};
+pub use paint::Fade;
+pub use surface::{dashed_border, focus_ring, surface, Border, Frame};
 pub use switch::Switch;
-pub use text::TextStyles;
+pub use text::{line, Line, TextStyles};
 pub use textbox::{input_state, TextBox};
 pub use theme::{theme, Accent, Theme};
 pub use tooltip::TooltipExt;

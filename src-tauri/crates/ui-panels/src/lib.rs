@@ -59,11 +59,12 @@
 //!
 //! # Fidelity notes
 //!
-//! - Text: GPUI applies no kerning unless asked (see [`local::kerning`]) and places 14/20 and
-//!   11/16 text 1 px lower than Chromium (see [`local::baseline_shift`]); both are corrected for
-//!   the panels' own texts, and kerning for the foundation's elements inside them (inherited).
-//!   Ellipses cut where Chromium cuts ([`local::truncated_line`]). Letter-spaced headings are
-//!   painted glyph by glyph ([`local::spaced_line`]).
+//! - Text is laid out as Chromium laid it out (kerning, baseline, ellipsis, letter-spacing,
+//!   fallback fonts) by `qust_fluent::text`; single-line texts are `qust_fluent::Line`s.
+//! - Right-to-left text: what the Stream information window shows of the stream (station, title,
+//!   every value) and the error texts of Settings that can carry another program's message go
+//!   through `qust_text::shown` when they change; tooltips, the clipboard and accessibility
+//!   labels keep the logical text.
 //!
 //! - A Stream information value is selected whole by a right-click (then Copy, or Ctrl+C); the
 //!   page also allowed selecting part of a value with the mouse, which plain GPUI text can't.
@@ -75,7 +76,6 @@ pub mod format;
 #[cfg(feature = "capture")]
 pub mod harness;
 pub mod info;
-pub mod local;
 pub mod services;
 pub mod settings;
 

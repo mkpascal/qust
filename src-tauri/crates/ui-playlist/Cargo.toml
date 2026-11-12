@@ -16,6 +16,8 @@ qust-fluent = { path = "../fluent" }
 qust-ui = { path = "../ui" }
 # Only `menu::Menu`, the native menu's description (no GPUI glue).
 qust-shell = { path = "../shell" }
+# Right-to-left titles: what a row draws of its title and detail.
+qust-text = { path = "../text" }
 serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
