@@ -1,7 +1,7 @@
 // Builds Qust's Windows installer from a built qust.exe, with NSIS:
 //
-//   node packaging/windows/build-installer.mjs --exe src-tauri/target/release/qust.exe --version 1.2.0
-//     [--out build/bin] [--icon src-tauri/icons/icon.ico] [--makensis <path>] [--define NAME=VALUE]…
+//   node packaging/windows/build-installer.mjs --exe target/release/qust.exe --version 1.2.0
+//     [--out build/bin] [--icon icons/icon.ico] [--makensis <path>] [--define NAME=VALUE]…
 //
 // writes <out>/Qust_<version>_x64-setup.exe, the name the releases have always used. Sign it
 // for the updaters afterwards (qust-sign). makensis is looked for in --makensis, $MAKENSIS, the
@@ -46,7 +46,7 @@ mkdirSync(out, { recursive: true });
 const productName = options.define.find((define) => define.startsWith('PRODUCTNAME='))?.slice('PRODUCTNAME='.length) ?? 'Qust';
 const outFile = join(out, `${productName}_${version}_x64-setup.exe`);
 
-const icon = options.icon ? resolve(options.icon) : join(root, 'src-tauri', 'icons', 'icon.ico');
+const icon = options.icon ? resolve(options.icon) : join(root, 'icons', 'icon.ico');
 if (options.icon && !existsSync(icon)) fail(`${icon} not found`);
 
 function findMakensis() {

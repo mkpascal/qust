@@ -1,0 +1,15 @@
+{
+  "extends": "playing-marquee",
+  "description": "An Arabic title wider than its line (qust-text): which end shows first and where the sweep ends. Arabic station name that fits.",
+  "state": {
+    "cartridges": [
+      { "title": "إذاعة مصر", "url": "http://stream.example-eg.com/misr", "preload": null },
+      { "title": "FIP", "url": "https://icecast.radiofrance.fr/fip-hifi.aac", "preload": null },
+      null, null, null, null
+    ],
+    "station": "إذاعة مصر",
+    "title": "عبد الحليم حافظ - قارئة الفنجان (حفلة لندن الكاملة مع الفرقة الماسية)"
+  },
+  "times": ["0%", "50%", "100%"],
+  "scales": [1]
+}

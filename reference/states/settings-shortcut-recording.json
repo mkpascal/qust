@@ -1,0 +1,46 @@
+{
+  "window": "settings",
+  "description": "Recording the Stop shortcut: dashed accent box, \"Press a shortcut…\", the hint \"Esc to cancel, Backspace to reset\".",
+  "settings": {
+    "theme": "system",
+    "visualizer-colors": "classic",
+    "autoplay": false,
+    "reconnect-minutes": 5
+  },
+  "shortcuts": {
+    "play": {
+      "accelerator": "Ctrl+Alt+Insert",
+      "registered": true
+    },
+    "stop": {
+      "accelerator": "Ctrl+Alt+KeyH",
+      "registered": true
+    },
+    "toggle": {
+      "accelerator": "",
+      "registered": false
+    }
+  },
+  "update": {
+    "installed": true,
+    "current": "1.1.5",
+    "status": "idle",
+    "version": null,
+    "progress": null,
+    "error": null,
+    "lastCheck": 1794392500,
+    "auto": true
+  },
+  "background": {
+    "available": true,
+    "enabled": false,
+    "startsWithWindows": false
+  },
+  "version": "1.1.5",
+  "now": 1794400000,
+  "actions": [
+    {
+      "click": "[data-action=\"stop\"]"
+    }
+  ]
+}

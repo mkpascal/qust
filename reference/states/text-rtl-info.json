@@ -1,0 +1,19 @@
+{
+  "extends": "info-playing-stream",
+  "description": "Stream information with right-to-left metadata (qust-text): Arabic title (ellipsis), Hebrew station, Persian genre, mixed description and server.",
+  "scales": [
+    1
+  ],
+  "status": {
+    "station": "גלגלצ - המוזיקה הישראלית",
+    "url": "https://glzwizzlv.bynetcdn.com/glglz_mp3"
+  },
+  "info": {
+    "title": "عبد الحليم حافظ - قارئة الفنجان (حفلة لندن الكاملة مع الفرقة الماسية) - تسجيل نادر",
+    "name": "גלגלצ - המוזיקה הישראלית",
+    "genre": "پاپ، سنتی، ۲۴ ساعته",
+    "description": "Radio Sawa راديو سوا - أغاني عربية (24/7) [AAC+]",
+    "website": "https://glz.co.il/גלגלצ",
+    "server": "Icecast 2.4.4 (עברית)"
+  }
+}

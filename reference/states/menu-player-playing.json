@@ -1,0 +1,89 @@
+{
+  "window": "player",
+  "description": "Right-click on the player area while playing: Pause / Stop.",
+  "drawer": false,
+  "state": {
+    "state": "playing",
+    "cartridges": [
+      {
+        "title": "C9 Radio",
+        "url": "http://stream.c9.fr/c9-128.mp3",
+        "preload": null
+      },
+      {
+        "title": "FIP",
+        "url": "https://icecast.radiofrance.fr/fip-hifi.aac",
+        "preload": null
+      },
+      {
+        "title": "Radio Paradise",
+        "url": "http://stream.radioparadise.com/aac-320",
+        "preload": null
+      },
+      {
+        "title": "SomaFM Groove Salad",
+        "url": "https://ice2.somafm.com/groovesalad-128-mp3",
+        "preload": null
+      },
+      null,
+      {
+        "title": "KEXP",
+        "url": "https://kexp-mp3-128.streamguys1.com:8443/kexp128.mp3",
+        "preload": null
+      }
+    ],
+    "activeSlot": 0,
+    "activeId": null,
+    "instant": false,
+    "station": "C9 Radio",
+    "title": "Daft Punk - Around the World",
+    "titleDim": false,
+    "bitrate": 128,
+    "samplerate": 44100,
+    "channels": 2,
+    "volume": 70,
+    "balance": 0,
+    "colors": "classic",
+    "elapsed": 8.4,
+    "duration": null,
+    "position": null,
+    "seekable": false
+  },
+  "playlist": [],
+  "frame": {
+    "shape": "music"
+  },
+  "shortcuts": {
+    "play": {
+      "accelerator": "Ctrl+Alt+Insert",
+      "registered": true
+    },
+    "stop": {
+      "accelerator": "Ctrl+Alt+KeyH",
+      "registered": true
+    },
+    "toggle": {
+      "accelerator": "",
+      "registered": false
+    }
+  },
+  "update": {
+    "installed": true,
+    "current": "1.1.5",
+    "status": "idle",
+    "version": null,
+    "progress": null,
+    "error": null,
+    "lastCheck": 1794392500,
+    "auto": true
+  },
+  "now": 1794400000,
+  "actions": [
+    {
+      "contextmenu": ".transport"
+    }
+  ],
+  "themes": [
+    "dark"
+  ]
+}

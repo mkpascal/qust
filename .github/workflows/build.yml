@@ -1,6 +1,7 @@
 name: Build
 
-# Every push to main builds Windows and macOS. When the version in package.json has no release
+# Every push to main builds Windows and macOS. When the version in Cargo.toml ([workspace.package])
+# has no release
 # yet, the push also publishes a GitHub release "Qust vX.Y.Z" with the installers and the signed
 # updater files (latest.json), which installed copies of Qust update from: the GPUI versions and
 # the Tauri ones before them read the same latest.json.
@@ -17,8 +18,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # The Cargo workspace.
-  WORKSPACE: src-tauri
 
 jobs:
   release:
@@ -33,7 +32,8 @@ jobs:
 
       - id: version
         run: |
-          version=$(node -p "require('./package.json').version")
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)
+          test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # A draft until both platforms have uploaded, so the updater never sees a half-done release.
@@ -74,19 +74,16 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: '${{ env.WORKSPACE }} -> target'
 
       # GPUI needs the Windows SDK's fxc.exe and rc.exe, which the runner image has. NSIS is
       # installed on the image too (build-installer.mjs finds it in Program Files).
       - run: cargo build --release --locked -p qust-app
-        working-directory: ${{ env.WORKSPACE }}
 
-      - run: node packaging/windows/build-installer.mjs --exe "$WORKSPACE/target/release/qust.exe" --version "$VERSION" --icon "$WORKSPACE/icons/icon.ico" --out dist
+      - run: node packaging/windows/build-installer.mjs --exe "target/release/qust.exe" --version "$VERSION" --icon "icons/icon.ico" --out dist
 
       # Releases only: the updaters' signature (the key comes from the repository secrets).
       - if: needs.release.outputs.id
-        run: cargo run --release --locked -p qust-updater --features sign --bin qust-sign -- "$GITHUB_WORKSPACE/dist/Qust_${VERSION}_x64-setup.exe" --version "$VERSION"
-        working-directory: ${{ env.WORKSPACE }}
+        run: cargo run --release --locked -p qust-updater --features sign --bin qust-sign -- "dist/Qust_${VERSION}_x64-setup.exe" --version "$VERSION"
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -111,24 +108,21 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: '${{ env.WORKSPACE }} -> target'
 
       - run: |
           cargo build --release --locked -p qust-app --target aarch64-apple-darwin
           cargo build --release --locked -p qust-app --target x86_64-apple-darwin
-        working-directory: ${{ env.WORKSPACE }}
 
       # The bundle, the disk image and the update archive (a universal binary made with lipo).
       - run: |
           packaging/macos/build-app.sh --version "$VERSION" \
-            --arm64 "$WORKSPACE/target/aarch64-apple-darwin/release/qust" \
-            --x86_64 "$WORKSPACE/target/x86_64-apple-darwin/release/qust" \
-            --icon "$WORKSPACE/icons/icon.icns" --out dist
+            --arm64 "target/aarch64-apple-darwin/release/qust" \
+            --x86_64 "target/x86_64-apple-darwin/release/qust" \
+            --icon "icons/icon.icns" --out dist
           rm -rf dist/Qust.app
 
       - if: needs.release.outputs.id
-        run: cargo run --release --locked -p qust-updater --features sign --bin qust-sign -- "$GITHUB_WORKSPACE/dist/Qust_${VERSION}_universal.app.tar.gz" --version "$VERSION"
-        working-directory: ${{ env.WORKSPACE }}
+        run: cargo run --release --locked -p qust-updater --features sign --bin qust-sign -- "dist/Qust_${VERSION}_universal.app.tar.gz" --version "$VERSION"
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

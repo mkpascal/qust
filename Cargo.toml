@@ -1,0 +1,75 @@
+# The release version: the one place a release bumps it. The app (crates/app) takes it with
+# `version.workspace = true`, and its build.rs gives it to the code, the executable's version
+# information and Settings; CI reads it to name the release.
+[workspace.package]
+version = "1.2.0"
+authors = ["Pascal Muang Khot"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/mkpascal/qust"
+edition = "2021"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+
+# The release profile for measuring on a PC where an installed Qust runs: only qust-shell is
+# built with debug assertions, which gives it the development instance id
+# ("com.pascalmuangkhot.qust.debug"), so the measured build never hands over to the user's Qust.
+# Everything else is the release build.  cargo build --profile measure -p qust-app
+[profile.measure]
+inherits = "release"
+
+[profile.measure.package.qust-shell]
+debug-assertions = true
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/codecs",
+    "crates/audio",
+    "crates/spectrum",
+    "crates/player",
+    "crates/updater",
+    "crates/fluent",
+    "crates/ui",
+    "crates/ui-player",
+    "crates/ui-playlist",
+    "crates/ui-panels",
+    "crates/shell",
+    "crates/text",
+    "crates/app",
+]
+# The patched GPUI crate below is a dependency, not a member.
+exclude = ["vendor/gpui-pre-windows"]
+
+# Right-to-left text on Windows. gpui-pre-windows 0.3.12's DirectWrite renderer (DrawGlyphRun in
+# src/direct_write.rs) ignores each run's origin and bidi level and lays every glyph left to
+# right, so Arabic or Hebrew text in a text box (and any line GPUI shapes itself) comes out
+# mirrored. vendor/gpui-pre-windows is the registry's 0.3.12 with vendor/gpui-pre-windows.patch
+# applied (two hunks in direct_write.rs plus comments, nothing else): glyphs are placed from the
+# run's origin, leftwards for right-to-left runs, and the line's runs sorted by position.
+# Left-to-right text lays out exactly as before. qust-app turns on qust-text's "native-bidi",
+# which relies on this. When GPUI is bumped (gpui-pre, gpui-pre-platform and gpui-component move
+# together), re-apply the patch to the new gpui-pre-windows and replace the copy, or drop both
+# once upstream lays right-to-left runs out itself.
+[patch.crates-io]
+gpui-pre-windows = { path = "vendor/gpui-pre-windows" }
+
+# Debug builds decode audio in real time too: without optimization the decoders and the resampler
+# would be many times slower.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.dev.package.qust-audio]
+opt-level = 2
+
+[profile.dev.package.qust-codecs]
+opt-level = 2
+
+[profile.dev.package.qust-spectrum]
+opt-level = 2
+
+[profile.dev.package.qust-player]
+opt-level = 2

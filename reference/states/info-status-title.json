@@ -1,0 +1,28 @@
+{
+  "window": "info",
+  "description": "A stream without ICY titles: the title from the Icecast status page, metadata interval \"None\", AAC+ from the content type, bitrate 0 shown as a dash, 6 channels.",
+  "status": {
+    "state": "playing",
+    "station": "FIP",
+    "url": "https://icecast.radiofrance.fr/fip-hifi.aac",
+    "buffer": 2.43,
+    "stalls": 2,
+    "statusTitle": "Thelonious Monk - Round Midnight"
+  },
+  "info": {
+    "name": "FIP",
+    "contentType": "audio/aacp",
+    "bitrate": 0,
+    "rate": 192,
+    "samplerate": 48000,
+    "channels": 6,
+    "metaint": 0,
+    "metaBytes": 0,
+    "bytes": 812000,
+    "titleChanges": 0,
+    "reconnects": 0,
+    "connectedSeconds": 3725,
+    "server": "Icecast 2.4.0-kh15"
+  },
+  "actions": []
+}

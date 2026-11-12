@@ -1,0 +1,33 @@
+{
+  "window": "info",
+  "description": "Long values truncated with an ellipsis (title, genre, description, website, server).",
+  "status": {
+    "state": "playing",
+    "station": "Radio Paradise - Main Mix (320 kbps AAC, listener supported, commercial free)",
+    "url": "http://stream.c9.fr/c9-128.mp3",
+    "buffer": 2.43,
+    "stalls": 2,
+    "statusTitle": null
+  },
+  "info": {
+    "title": "Superman Lovers - Starlight (Midnight Train to Paris Extended Club Mix) [Remastered 2024]",
+    "name": "Radio Paradise - Main Mix (320 kbps AAC, listener supported, commercial free)",
+    "genre": "Eclectic, Rock, World, Electronica, Ambient, Folk, Jazz, Classical, Blues",
+    "description": "An eclectic online mix of rock, pop, world, electronica and more, DJ-curated and listener-supported since the year 2000",
+    "website": "https://radioparadise.com/listen/stations/main-mix?utm_source=icecast&utm_medium=stream",
+    "server": "Icecast 2.4.99.2 (Radio Paradise build with extended statistics)",
+    "contentType": "audio/aac; charset=utf-8; codecs=\"mp4a.40.2\"",
+    "format": null,
+    "bitrate": 320,
+    "rate": 131,
+    "samplerate": 44100,
+    "channels": 2,
+    "metaint": 16000,
+    "metaBytes": 2345678,
+    "bytes": 987654321,
+    "titleChanges": 4,
+    "reconnects": 1,
+    "connectedSeconds": 754
+  },
+  "actions": []
+}

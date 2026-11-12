@@ -1,0 +1,24 @@
+{
+  "window": "info",
+  "description": "A local FLAC file: no ICY metadata (\"None\" interval), no host.",
+  "status": {
+    "state": "playing",
+    "station": "Digital Love",
+    "url": "C:\\Users\\Me\\Music\\Daft Punk\\Discovery\\03 Digital Love.flac",
+    "buffer": 0,
+    "stalls": 0,
+    "statusTitle": null
+  },
+  "info": {
+    "format": "FLAC",
+    "bitrate": 1011,
+    "samplerate": 44100,
+    "channels": 2,
+    "bytes": 38052118,
+    "metaBytes": 0,
+    "connectedSeconds": 61,
+    "reconnects": 0,
+    "titleChanges": 0
+  },
+  "actions": []
+}

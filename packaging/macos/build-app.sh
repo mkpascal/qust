@@ -4,7 +4,7 @@
 #   packaging/macos/build-app.sh --version 1.2.0 \
 #     --binary target/universal-apple-darwin/release/qust          (a universal binary)
 #   or --arm64 target/aarch64-apple-darwin/release/qust --x86_64 target/x86_64-apple-darwin/release/qust
-#     [--icon src-tauri/icons/icon.icns] [--out build/bin] [--minimum-system-version 10.15]
+#     [--icon icons/icon.icns] [--out build/bin] [--minimum-system-version 10.15]
 #
 # writes into <out>:
 #   Qust.app                               the bundle (Contents/{Info.plist,MacOS/qust,Resources/icon.icns})
@@ -22,7 +22,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 
-version="" binary="" arm64="" x86_64="" icon="$root/src-tauri/icons/icon.icns" out="$root/build/bin"
+version="" binary="" arm64="" x86_64="" icon="$root/icons/icon.icns" out="$root/build/bin"
 minimum="10.15"
 while [ $# -gt 0 ]; do
   case "$1" in

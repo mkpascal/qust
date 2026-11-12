@@ -1,0 +1,106 @@
+{
+  "extends": "drawer-entries",
+  "description": "Right-to-left playlist rows (qust-text): Persian with digits, Hebrew with points, Arabic with vowel marks, lam-alef, Urdu, Arabic already in presentation forms, Kurdish, Syriac, Thaana, a long Arabic title (ellipsis), digits inside Arabic. Hebrew station, Persian title.",
+  "scales": [
+    1
+  ],
+  "state": {
+    "state": "playing",
+    "cartridges": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "activeSlot": null,
+    "activeId": 3,
+    "station": "גלי צה״ל - שידור חי",
+    "title": "رادیو جوان ۲۴ ساعته",
+    "titleDim": false,
+    "bitrate": 128,
+    "samplerate": 44100,
+    "channels": 2,
+    "elapsed": 61
+  },
+  "playlist": [
+    {
+      "id": 1,
+      "title": "پخش زنده: ساعت ۱۴:۳۰ - برنامه 3",
+      "url": "http://radio.example.ir/live",
+      "duration": null,
+      "missing": false
+    },
+    {
+      "id": 2,
+      "title": "שָׁלוֹם עֲלֵיכֶם",
+      "path": "C:\\Music\\shalom.mp3",
+      "duration": 180,
+      "missing": false
+    },
+    {
+      "id": 3,
+      "title": "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ",
+      "path": "C:\\Music\\basmala.mp3",
+      "duration": 30,
+      "missing": false
+    },
+    {
+      "id": 4,
+      "title": "لا إله إلا الله",
+      "path": "C:\\Music\\tahlil.mp3",
+      "duration": 60,
+      "missing": false
+    },
+    {
+      "id": 5,
+      "title": "نصرت فتح علی خان - دم مست قلندر",
+      "path": "C:\\Music\\nusrat.mp3",
+      "duration": 600,
+      "missing": false
+    },
+    {
+      "id": 6,
+      "title": "ﻓﻴﺮﻭﺯ - ﻛﻴﻔﻚ ﺇﻧﺖ",
+      "path": "C:\\Music\\legacy.mp3",
+      "duration": 245,
+      "missing": false
+    },
+    {
+      "id": 7,
+      "title": "دەنگی ئەمریکا - گوڵی سوور",
+      "path": "C:\\Music\\kurdish.mp3",
+      "duration": 200,
+      "missing": false
+    },
+    {
+      "id": 8,
+      "title": "ܫܠܡܐ ܥܠܡܐ",
+      "path": "C:\\Music\\syriac.mp3",
+      "duration": 150,
+      "missing": false
+    },
+    {
+      "id": 9,
+      "title": "ދިވެހި ރާއްޖެ",
+      "path": "C:\\Music\\thaana.mp3",
+      "duration": 120,
+      "missing": false
+    },
+    {
+      "id": 10,
+      "title": "عبد الحليم حافظ - قارئة الفنجان (حفلة لندن الكاملة مع الفرقة الماسية) - تسجيل نادر جداً من الأرشيف",
+      "path": "C:\\Music\\halim.mp3",
+      "duration": 2700,
+      "missing": false
+    },
+    {
+      "id": 11,
+      "title": "Track 07 - المسار ٧ - 3:45",
+      "path": "C:\\Music\\track07.mp3",
+      "duration": 225,
+      "missing": false
+    }
+  ]
+}

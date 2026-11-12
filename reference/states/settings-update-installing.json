@@ -1,0 +1,42 @@
+{
+  "window": "settings",
+  "description": "Updates: Installing: button disabled.",
+  "settings": {
+    "theme": "system",
+    "visualizer-colors": "classic",
+    "autoplay": false,
+    "reconnect-minutes": 5
+  },
+  "shortcuts": {
+    "play": {
+      "accelerator": "Ctrl+Alt+Insert",
+      "registered": true
+    },
+    "stop": {
+      "accelerator": "Ctrl+Alt+KeyH",
+      "registered": true
+    },
+    "toggle": {
+      "accelerator": "",
+      "registered": false
+    }
+  },
+  "update": {
+    "installed": true,
+    "current": "1.1.5",
+    "status": "installing",
+    "version": "1.2.0",
+    "progress": null,
+    "error": null,
+    "lastCheck": 1794392500,
+    "auto": true
+  },
+  "background": {
+    "available": true,
+    "enabled": false,
+    "startsWithWindows": false
+  },
+  "version": "1.1.5",
+  "now": 1794400000,
+  "actions": []
+}

@@ -1,0 +1,501 @@
+{
+  "window": "player",
+  "description": "Sixty tracks: the list scrolls (custom 10 px scrollbar), at the top.",
+  "drawer": true,
+  "state": {
+    "state": "stopped",
+    "cartridges": [
+      {
+        "title": "C9 Radio",
+        "url": "http://stream.c9.fr/c9-128.mp3",
+        "preload": null
+      },
+      {
+        "title": "FIP",
+        "url": "https://icecast.radiofrance.fr/fip-hifi.aac",
+        "preload": null
+      },
+      {
+        "title": "Radio Paradise",
+        "url": "http://stream.radioparadise.com/aac-320",
+        "preload": null
+      },
+      {
+        "title": "SomaFM Groove Salad",
+        "url": "https://ice2.somafm.com/groovesalad-128-mp3",
+        "preload": null
+      },
+      null,
+      {
+        "title": "KEXP",
+        "url": "https://kexp-mp3-128.streamguys1.com:8443/kexp128.mp3",
+        "preload": null
+      }
+    ],
+    "activeSlot": 0,
+    "activeId": null,
+    "instant": false,
+    "station": "C9 Radio",
+    "title": "Stopped",
+    "titleDim": true,
+    "bitrate": null,
+    "samplerate": null,
+    "channels": null,
+    "volume": 70,
+    "balance": 0,
+    "colors": "classic",
+    "elapsed": 0,
+    "duration": null,
+    "position": null,
+    "seekable": false
+  },
+  "playlist": [
+    {
+      "id": 100,
+      "title": "Air - Track 01",
+      "path": "C:\\Users\\Me\\Music\\Mix\\01.mp3",
+      "duration": 150.4,
+      "missing": false
+    },
+    {
+      "id": 101,
+      "title": "Justice - Track 02",
+      "path": "C:\\Users\\Me\\Music\\Mix\\02.mp3",
+      "duration": 187.4,
+      "missing": false
+    },
+    {
+      "id": 102,
+      "title": "Cassius - Track 03",
+      "path": "C:\\Users\\Me\\Music\\Mix\\03.mp3",
+      "duration": 224.4,
+      "missing": false
+    },
+    {
+      "id": 103,
+      "title": "Phoenix - Track 04",
+      "path": "C:\\Users\\Me\\Music\\Mix\\04.mp3",
+      "duration": 261.4,
+      "missing": false
+    },
+    {
+      "id": 104,
+      "title": "Étienne de Crécy - Track 05",
+      "path": "C:\\Users\\Me\\Music\\Mix\\05.mp3",
+      "duration": 298.4,
+      "missing": false
+    },
+    {
+      "id": 105,
+      "title": "Motorbass - Track 06",
+      "path": "C:\\Users\\Me\\Music\\Mix\\06.mp3",
+      "duration": 335.4,
+      "missing": false
+    },
+    {
+      "id": 106,
+      "title": "Kavinsky - Track 07",
+      "path": "C:\\Users\\Me\\Music\\Mix\\07.mp3",
+      "duration": 372.4,
+      "missing": false
+    },
+    {
+      "id": 107,
+      "title": "Sébastien Tellier - Track 08",
+      "path": "C:\\Users\\Me\\Music\\Mix\\08.mp3",
+      "duration": 169.4,
+      "missing": false
+    },
+    {
+      "id": 108,
+      "title": "Breakbot - Track 09",
+      "path": "C:\\Users\\Me\\Music\\Mix\\09.mp3",
+      "duration": 206.4,
+      "missing": false
+    },
+    {
+      "id": 109,
+      "title": "Mr. Oizo - Track 10",
+      "path": "C:\\Users\\Me\\Music\\Mix\\10.mp3",
+      "duration": 243.4,
+      "missing": false
+    },
+    {
+      "id": 110,
+      "title": "Air - Track 11",
+      "path": "C:\\Users\\Me\\Music\\Mix\\11.mp3",
+      "duration": 280.4,
+      "missing": false
+    },
+    {
+      "id": 111,
+      "title": "Justice - Track 12",
+      "path": "C:\\Users\\Me\\Music\\Mix\\12.mp3",
+      "duration": 317.4,
+      "missing": false
+    },
+    {
+      "id": 112,
+      "title": "Cassius - Track 13",
+      "path": "C:\\Users\\Me\\Music\\Mix\\13.mp3",
+      "duration": 354.4,
+      "missing": false
+    },
+    {
+      "id": 113,
+      "title": "Phoenix - Track 14",
+      "path": "C:\\Users\\Me\\Music\\Mix\\14.mp3",
+      "duration": 151.4,
+      "missing": false
+    },
+    {
+      "id": 114,
+      "title": "Étienne de Crécy - Track 15",
+      "path": "C:\\Users\\Me\\Music\\Mix\\15.mp3",
+      "duration": 188.4,
+      "missing": false
+    },
+    {
+      "id": 115,
+      "title": "Motorbass - Track 16",
+      "path": "C:\\Users\\Me\\Music\\Mix\\16.mp3",
+      "duration": 225.4,
+      "missing": false
+    },
+    {
+      "id": 116,
+      "title": "Kavinsky - Track 17",
+      "path": "C:\\Users\\Me\\Music\\Mix\\17.mp3",
+      "duration": 262.4,
+      "missing": false
+    },
+    {
+      "id": 117,
+      "title": "Sébastien Tellier - Track 18",
+      "path": "C:\\Users\\Me\\Music\\Mix\\18.mp3",
+      "duration": 299.4,
+      "missing": false
+    },
+    {
+      "id": 118,
+      "title": "Breakbot - Track 19",
+      "path": "C:\\Users\\Me\\Music\\Mix\\19.mp3",
+      "duration": 336.4,
+      "missing": false
+    },
+    {
+      "id": 119,
+      "title": "Mr. Oizo - Track 20",
+      "path": "C:\\Users\\Me\\Music\\Mix\\20.mp3",
+      "duration": 373.4,
+      "missing": false
+    },
+    {
+      "id": 120,
+      "title": "Air - Track 21",
+      "path": "C:\\Users\\Me\\Music\\Mix\\21.mp3",
+      "duration": 170.4,
+      "missing": false
+    },
+    {
+      "id": 121,
+      "title": "Justice - Track 22",
+      "path": "C:\\Users\\Me\\Music\\Mix\\22.mp3",
+      "duration": 207.4,
+      "missing": false
+    },
+    {
+      "id": 122,
+      "title": "Cassius - Track 23",
+      "path": "C:\\Users\\Me\\Music\\Mix\\23.mp3",
+      "duration": 244.4,
+      "missing": false
+    },
+    {
+      "id": 123,
+      "title": "Phoenix - Track 24",
+      "path": "C:\\Users\\Me\\Music\\Mix\\24.mp3",
+      "duration": 281.4,
+      "missing": false
+    },
+    {
+      "id": 124,
+      "title": "Étienne de Crécy - Track 25",
+      "path": "C:\\Users\\Me\\Music\\Mix\\25.mp3",
+      "duration": 318.4,
+      "missing": false
+    },
+    {
+      "id": 125,
+      "title": "Motorbass - Track 26",
+      "path": "C:\\Users\\Me\\Music\\Mix\\26.mp3",
+      "duration": 355.4,
+      "missing": false
+    },
+    {
+      "id": 126,
+      "title": "Kavinsky - Track 27",
+      "path": "C:\\Users\\Me\\Music\\Mix\\27.mp3",
+      "duration": 152.4,
+      "missing": false
+    },
+    {
+      "id": 127,
+      "title": "Sébastien Tellier - Track 28",
+      "path": "C:\\Users\\Me\\Music\\Mix\\28.mp3",
+      "duration": 189.4,
+      "missing": false
+    },
+    {
+      "id": 128,
+      "title": "Breakbot - Track 29",
+      "path": "C:\\Users\\Me\\Music\\Mix\\29.mp3",
+      "duration": 226.4,
+      "missing": false
+    },
+    {
+      "id": 129,
+      "title": "Mr. Oizo - Track 30",
+      "path": "C:\\Users\\Me\\Music\\Mix\\30.mp3",
+      "duration": 263.4,
+      "missing": false
+    },
+    {
+      "id": 130,
+      "title": "Air - Track 31",
+      "path": "C:\\Users\\Me\\Music\\Mix\\31.mp3",
+      "duration": 300.4,
+      "missing": false
+    },
+    {
+      "id": 131,
+      "title": "Justice - Track 32",
+      "path": "C:\\Users\\Me\\Music\\Mix\\32.mp3",
+      "duration": 337.4,
+      "missing": false
+    },
+    {
+      "id": 132,
+      "title": "Cassius - Track 33",
+      "path": "C:\\Users\\Me\\Music\\Mix\\33.mp3",
+      "duration": 374.4,
+      "missing": false
+    },
+    {
+      "id": 133,
+      "title": "Phoenix - Track 34",
+      "path": "C:\\Users\\Me\\Music\\Mix\\34.mp3",
+      "duration": 171.4,
+      "missing": false
+    },
+    {
+      "id": 134,
+      "title": "Étienne de Crécy - Track 35",
+      "path": "C:\\Users\\Me\\Music\\Mix\\35.mp3",
+      "duration": 208.4,
+      "missing": false
+    },
+    {
+      "id": 135,
+      "title": "Motorbass - Track 36",
+      "path": "C:\\Users\\Me\\Music\\Mix\\36.mp3",
+      "duration": 245.4,
+      "missing": false
+    },
+    {
+      "id": 136,
+      "title": "Kavinsky - Track 37",
+      "path": "C:\\Users\\Me\\Music\\Mix\\37.mp3",
+      "duration": 282.4,
+      "missing": false
+    },
+    {
+      "id": 137,
+      "title": "Sébastien Tellier - Track 38",
+      "path": "C:\\Users\\Me\\Music\\Mix\\38.mp3",
+      "duration": 319.4,
+      "missing": false
+    },
+    {
+      "id": 138,
+      "title": "Breakbot - Track 39",
+      "path": "C:\\Users\\Me\\Music\\Mix\\39.mp3",
+      "duration": 356.4,
+      "missing": false
+    },
+    {
+      "id": 139,
+      "title": "Mr. Oizo - Track 40",
+      "path": "C:\\Users\\Me\\Music\\Mix\\40.mp3",
+      "duration": 153.4,
+      "missing": false
+    },
+    {
+      "id": 140,
+      "title": "Air - Track 41",
+      "path": "C:\\Users\\Me\\Music\\Mix\\41.mp3",
+      "duration": 190.4,
+      "missing": false
+    },
+    {
+      "id": 141,
+      "title": "Justice - Track 42",
+      "path": "C:\\Users\\Me\\Music\\Mix\\42.mp3",
+      "duration": 227.4,
+      "missing": false
+    },
+    {
+      "id": 142,
+      "title": "Cassius - Track 43",
+      "path": "C:\\Users\\Me\\Music\\Mix\\43.mp3",
+      "duration": 264.4,
+      "missing": false
+    },
+    {
+      "id": 143,
+      "title": "Phoenix - Track 44",
+      "path": "C:\\Users\\Me\\Music\\Mix\\44.mp3",
+      "duration": 301.4,
+      "missing": false
+    },
+    {
+      "id": 144,
+      "title": "Étienne de Crécy - Track 45",
+      "path": "C:\\Users\\Me\\Music\\Mix\\45.mp3",
+      "duration": 338.4,
+      "missing": false
+    },
+    {
+      "id": 145,
+      "title": "Motorbass - Track 46",
+      "path": "C:\\Users\\Me\\Music\\Mix\\46.mp3",
+      "duration": 375.4,
+      "missing": false
+    },
+    {
+      "id": 146,
+      "title": "Kavinsky - Track 47",
+      "path": "C:\\Users\\Me\\Music\\Mix\\47.mp3",
+      "duration": 172.4,
+      "missing": false
+    },
+    {
+      "id": 147,
+      "title": "Sébastien Tellier - Track 48",
+      "path": "C:\\Users\\Me\\Music\\Mix\\48.mp3",
+      "duration": 209.4,
+      "missing": false
+    },
+    {
+      "id": 148,
+      "title": "Breakbot - Track 49",
+      "path": "C:\\Users\\Me\\Music\\Mix\\49.mp3",
+      "duration": 246.4,
+      "missing": false
+    },
+    {
+      "id": 149,
+      "title": "Mr. Oizo - Track 50",
+      "path": "C:\\Users\\Me\\Music\\Mix\\50.mp3",
+      "duration": 283.4,
+      "missing": false
+    },
+    {
+      "id": 150,
+      "title": "Air - Track 51",
+      "path": "C:\\Users\\Me\\Music\\Mix\\51.mp3",
+      "duration": 320.4,
+      "missing": false
+    },
+    {
+      "id": 151,
+      "title": "Justice - Track 52",
+      "path": "C:\\Users\\Me\\Music\\Mix\\52.mp3",
+      "duration": 357.4,
+      "missing": false
+    },
+    {
+      "id": 152,
+      "title": "Cassius - Track 53",
+      "path": "C:\\Users\\Me\\Music\\Mix\\53.mp3",
+      "duration": 154.4,
+      "missing": false
+    },
+    {
+      "id": 153,
+      "title": "Phoenix - Track 54",
+      "path": "C:\\Users\\Me\\Music\\Mix\\54.mp3",
+      "duration": 191.4,
+      "missing": false
+    },
+    {
+      "id": 154,
+      "title": "Étienne de Crécy - Track 55",
+      "path": "C:\\Users\\Me\\Music\\Mix\\55.mp3",
+      "duration": 228.4,
+      "missing": false
+    },
+    {
+      "id": 155,
+      "title": "Motorbass - Track 56",
+      "path": "C:\\Users\\Me\\Music\\Mix\\56.mp3",
+      "duration": 265.4,
+      "missing": false
+    },
+    {
+      "id": 156,
+      "title": "Kavinsky - Track 57",
+      "path": "C:\\Users\\Me\\Music\\Mix\\57.mp3",
+      "duration": 302.4,
+      "missing": false
+    },
+    {
+      "id": 157,
+      "title": "Sébastien Tellier - Track 58",
+      "path": "C:\\Users\\Me\\Music\\Mix\\58.mp3",
+      "duration": 339.4,
+      "missing": false
+    },
+    {
+      "id": 158,
+      "title": "Breakbot - Track 59",
+      "path": "C:\\Users\\Me\\Music\\Mix\\59.mp3",
+      "duration": 376.4,
+      "missing": false
+    },
+    {
+      "id": 159,
+      "title": "Mr. Oizo - Track 60",
+      "path": "C:\\Users\\Me\\Music\\Mix\\60.mp3",
+      "duration": 173.4,
+      "missing": false
+    }
+  ],
+  "frame": null,
+  "shortcuts": {
+    "play": {
+      "accelerator": "Ctrl+Alt+Insert",
+      "registered": true
+    },
+    "stop": {
+      "accelerator": "Ctrl+Alt+KeyH",
+      "registered": true
+    },
+    "toggle": {
+      "accelerator": "",
+      "registered": false
+    }
+  },
+  "update": {
+    "installed": true,
+    "current": "1.1.5",
+    "status": "idle",
+    "version": null,
+    "progress": null,
+    "error": null,
+    "lastCheck": 1794392500,
+    "auto": true
+  },
+  "now": 1794400000,
+  "actions": []
+}

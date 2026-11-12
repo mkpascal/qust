@@ -1,0 +1,13 @@
+{
+  "name": "qust-ui-reference",
+  "private": true,
+  "type": "module",
+  "description": "Reference renders and measurements of the Qust webview UI (see README.md)",
+  "scripts": {
+    "render": "node harness/render.mjs",
+    "compare": "node compare.mjs"
+  },
+  "dependencies": {
+    "pngjs": "7.0.0"
+  }
+}

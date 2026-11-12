@@ -1,0 +1,39 @@
+{
+  "window": "info",
+  "description": "A stream with full ICY metadata: Playing badge in accent.",
+  "status": {
+    "state": "playing",
+    "station": "C9 Radio",
+    "url": "http://stream.c9.fr/c9-128.mp3",
+    "buffer": 2.43,
+    "stalls": 2,
+    "statusTitle": null
+  },
+  "info": {
+    "title": "Superman Lovers - Starlight",
+    "name": "C9 Radio",
+    "genre": "Electronic, House",
+    "description": "La radio electro de la Côte d'Azur",
+    "website": "https://www.c9.fr",
+    "server": "Icecast 2.4.4",
+    "contentType": "audio/mpeg",
+    "format": "MP3",
+    "bitrate": 128,
+    "rate": 131,
+    "samplerate": 44100,
+    "channels": 2,
+    "metaint": 16000,
+    "metaBytes": 18432,
+    "bytes": 12345678,
+    "titleChanges": 4,
+    "reconnects": 1,
+    "connectedSeconds": 754
+  },
+  "actions": [],
+  "scales": [
+    1,
+    1.25,
+    1.5,
+    2
+  ]
+}

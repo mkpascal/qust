@@ -22,7 +22,7 @@
 **Qust** is an open-source, simple, **qu**ick **st**reaming player.
   - Native Rust core: the whole audio and stream engine is compiled native code, so it starts instantly, decodes efficiently and uses very little CPU and memory,
   - Built-in stream engine: its own engine reads song titles and stream details directly,
-  - Lightweight interface layer: the interface is drawn natively by the content engine that's part of the operating system itself, already installed and kept up to date,
+  - Native interface: drawn by the GPU with GPUI, all in Rust, with no web engine or browser underneath,
   - Small and light: a 3.5 MB installer, with nothing extra bundled,
   - Features a cartridge-loading concept: six slots, saved with your volume, balance and settings,
   - Playlist drawer: drop music files, folders or .m3u / .pls lists, or add any stream or online audio file. Files play from where they are, with seeking,
@@ -39,12 +39,12 @@
 
 ## Building
 
-Qust is a [Tauri](https://tauri.app) app. You need [Node.js](https://nodejs.org) and [Rust](https://rustup.rs), plus the Visual Studio C++ build tools on Windows or the Xcode command line tools on macOS.
+Qust is written in [Rust](https://rustup.rs), with its windows drawn by [GPUI](https://gpui.rs). You need Rust, plus the Visual Studio C++ build tools and the Windows SDK on Windows, or Xcode on macOS. The installer is built with [NSIS](https://nsis.sourceforge.io) and [Node.js](https://nodejs.org).
 
 ```sh
-npm install
-npm start        # run in development
-npm run build    # app and installer, copied to build/bin/
+cargo run -p qust-app                   # run in development
+cargo build --release -p qust-app       # target/release/qust.exe
+node packaging/windows/build-installer.mjs --exe target/release/qust.exe --version 1.2.0   # installer into build/bin/
 ```
 
-Every push to `main` is built on GitHub Actions for Windows and macOS. Bumping the version in `package.json` publishes a [release](https://github.com/mkpascal/qust/releases), which installed copies of Qust update to.
+Every push to `main` is built on GitHub Actions for Windows and macOS. Bumping the version in `Cargo.toml` publishes a [release](https://github.com/mkpascal/qust/releases), which installed copies of Qust update to.

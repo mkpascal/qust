@@ -1,0 +1,13 @@
+{
+  "window": "info",
+  "description": "Nothing playing: \"Not playing\", the hint, Stopped badge, every value an em dash.",
+  "status": null,
+  "info": {},
+  "actions": [],
+  "scales": [
+    1,
+    1.25,
+    1.5,
+    2
+  ]
+}

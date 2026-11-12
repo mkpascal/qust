@@ -1,0 +1,42 @@
+{
+  "window": "settings",
+  "description": "Every choice changed: dark theme, accent colors, play on launch on, reconnect until stopped, helper on, every shortcut assigned (Win, F-key).",
+  "settings": {
+    "theme": "dark",
+    "visualizer-colors": "accent",
+    "autoplay": true,
+    "reconnect-minutes": 0
+  },
+  "shortcuts": {
+    "play": {
+      "accelerator": "Ctrl+Alt+Insert",
+      "registered": true
+    },
+    "stop": {
+      "accelerator": "Super+Shift+Digit1",
+      "registered": true
+    },
+    "toggle": {
+      "accelerator": "F9",
+      "registered": true
+    }
+  },
+  "update": {
+    "installed": true,
+    "current": "1.1.5",
+    "status": "idle",
+    "version": null,
+    "progress": null,
+    "error": null,
+    "lastCheck": 1794392500,
+    "auto": true
+  },
+  "background": {
+    "available": true,
+    "enabled": true,
+    "startsWithWindows": true
+  },
+  "version": "1.1.5",
+  "now": 1794400000,
+  "actions": []
+}

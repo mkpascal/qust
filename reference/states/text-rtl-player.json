@@ -1,0 +1,87 @@
+{
+  "extends": "drawer-entries",
+  "description": "Right-to-left text (qust-text): Arabic, Hebrew, Persian and mixed cartridge names, a long Arabic station line (ellipsis), an Arabic title that fits, and right-to-left playlist rows.",
+  "scales": [
+    1
+  ],
+  "state": {
+    "state": "playing",
+    "cartridges": [
+      {
+        "title": "إذاعة القرآن الكريم",
+        "url": "http://stream.radiojar.com/8s5u5tpdtwzuv",
+        "preload": null
+      },
+      {
+        "title": "גלגלצ",
+        "url": "https://glzwizzlv.bynetcdn.com/glglz_mp3",
+        "preload": null
+      },
+      {
+        "title": "Radio Sawa راديو سوا",
+        "url": "https://mbn-channel-03.akacast.akamaistream.net/7/24/233454/v1/ibb.akacast.akamaistream.net/mbn_channel_03",
+        "preload": null
+      },
+      {
+        "title": "رادیو جوان ۲۴",
+        "url": "http://live.radiojavan.com:8000/radiojavan",
+        "preload": null
+      },
+      {
+        "title": "نجوم إف إم - أغاني عربية على مدار الساعة",
+        "url": "http://ice.nogoumfm.net:8000/nogoum",
+        "preload": null
+      },
+      {
+        "title": "כאן 88 FM",
+        "url": "https://27863.live.streamtheworld.com/KAN_88.mp3",
+        "preload": null
+      }
+    ],
+    "activeSlot": 0,
+    "station": "إذاعة القرآن الكريم من القاهرة - البث المباشر على مدار الساعة بجودة عالية",
+    "title": "فيروز - كيفك إنت",
+    "titleDim": false,
+    "bitrate": 128,
+    "samplerate": 44100,
+    "channels": 2,
+    "elapsed": 754
+  },
+  "playlist": [
+    {
+      "id": 1,
+      "title": "فيروز - كيفك إنت",
+      "path": "C:\\Users\\Me\\Music\\فيروز\\كيفك إنت.mp3",
+      "duration": 245,
+      "missing": false
+    },
+    {
+      "id": 2,
+      "title": "عمرو دياب - Tamally Maak (Remix 2024)",
+      "url": "http://stream.example-arabic.com/amr.mp3",
+      "duration": null,
+      "missing": false
+    },
+    {
+      "id": 3,
+      "title": "Amr Diab - تملي معاك",
+      "path": "C:\\Users\\Me\\Music\\Amr Diab - Tamally Maak.mp3",
+      "duration": 291,
+      "missing": false
+    },
+    {
+      "id": 4,
+      "title": "أم كلثوم - أنت عمري (تسجيل حي 1964) [الجزء 2]",
+      "path": "C:\\Users\\Me\\Music\\Umm Kulthum.flac",
+      "duration": 3725,
+      "missing": false
+    },
+    {
+      "id": 5,
+      "title": "עומר אדם - תגידו לה (Live)",
+      "path": "C:\\Users\\Me\\Music\\omer.mp3",
+      "duration": 213,
+      "missing": true
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "window": "player",
+  "description": "Drawer with six tracks: files with durations, a stream (host instead of a duration), a missing file (struck through), a long title; the first cartridge active (its pinned row in accent).",
+  "drawer": true,
+  "state": {
+    "state": "stopped",
+    "cartridges": [
+      {
+        "title": "C9 Radio",
+        "url": "http://stream.c9.fr/c9-128.mp3",
+        "preload": null
+      },
+      {
+        "title": "FIP",
+        "url": "https://icecast.radiofrance.fr/fip-hifi.aac",
+        "preload": null
+      },
+      {
+        "title": "Radio Paradise",
+        "url": "http://stream.radioparadise.com/aac-320",
+        "preload": null
+      },
+      {
+        "title": "SomaFM Groove Salad",
+        "url": "https://ice2.somafm.com/groovesalad-128-mp3",
+        "preload": null
+      },
+      null,
+      {
+        "title": "KEXP",
+        "url": "https://kexp-mp3-128.streamguys1.com:8443/kexp128.mp3",
+        "preload": null
+      }
+    ],
+    "activeSlot": 0,
+    "activeId": null,
+    "instant": false,
+    "station": "C9 Radio",
+    "title": "Stopped",
+    "titleDim": true,
+    "bitrate": null,
+    "samplerate": null,
+    "channels": null,
+    "volume": 70,
+    "balance": 0,
+    "colors": "classic",
+    "elapsed": 0,
+    "duration": null,
+    "position": null,
+    "seekable": false
+  },
+  "playlist": [
+    {
+      "id": 1,
+      "title": "One More Time",
+      "path": "C:\\Users\\Me\\Music\\Daft Punk\\Discovery\\01 One More Time.flac",
+      "duration": 320.4,
+      "missing": false
+    },
+    {
+      "id": 2,
+      "title": "Aerodynamic",
+      "path": "C:\\Users\\Me\\Music\\Daft Punk\\Discovery\\02 Aerodynamic.flac",
+      "duration": 212.6,
+      "missing": false
+    },
+    {
+      "id": 3,
+      "title": "Digital Love",
+      "path": "C:\\Users\\Me\\Music\\Daft Punk\\Discovery\\03 Digital Love.flac",
+      "duration": 301.2,
+      "missing": false
+    },
+    {
+      "id": 4,
+      "title": "Radio Nova",
+      "url": "http://novazz.ice.infomaniak.ch/novazz-128.mp3",
+      "duration": null,
+      "missing": false
+    },
+    {
+      "id": 5,
+      "title": "Harder, Better, Faster, Stronger",
+      "path": "D:\\Old\\Harder Better Faster Stronger.mp3",
+      "duration": null,
+      "missing": true
+    },
+    {
+      "id": 6,
+      "title": "Episode 142: a conversation about the history of electronic music, with far too long a title",
+      "url": "https://cdn.podcasts.example.com/feeds/ep-142.mp3",
+      "duration": 3725,
+      "missing": false
+    }
+  ],
+  "frame": null,
+  "shortcuts": {
+    "play": {
+      "accelerator": "Ctrl+Alt+Insert",
+      "registered": true
+    },
+    "stop": {
+      "accelerator": "Ctrl+Alt+KeyH",
+      "registered": true
+    },
+    "toggle": {
+      "accelerator": "",
+      "registered": false
+    }
+  },
+  "update": {
+    "installed": true,
+    "current": "1.1.5",
+    "status": "idle",
+    "version": null,
+    "progress": null,
+    "error": null,
+    "lastCheck": 1794392500,
+    "auto": true
+  },
+  "now": 1794400000,
+  "actions": [],
+  "scales": [
+    1,
+    1.25,
+    1.5,
+    2
+  ]
+}

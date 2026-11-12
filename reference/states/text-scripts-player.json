@@ -1,0 +1,87 @@
+{
+  "extends": "drawer-entries",
+  "description": "Other scripts (qust-text): Chinese, Japanese, Korean, Thai, Devanagari, emoji, combining marks and Vietnamese in cartridge names, the station, the title and playlist rows.",
+  "scales": [
+    1
+  ],
+  "state": {
+    "state": "playing",
+    "cartridges": [
+      {
+        "title": "中国之声",
+        "url": "http://ngcdn001.cnr.cn/live/zgzs/index.m3u8",
+        "preload": null
+      },
+      {
+        "title": "J-POP 東京ラジオ",
+        "url": "https://stream.example.jp/tokyo",
+        "preload": null
+      },
+      {
+        "title": "KBS 쿨FM",
+        "url": "https://stream.example.kr/coolfm",
+        "preload": null
+      },
+      {
+        "title": "คลื่นความคิด",
+        "url": "https://stream.example.th/fm96",
+        "preload": null
+      },
+      {
+        "title": "आकाशवाणी",
+        "url": "https://air.example.in/vividh",
+        "preload": null
+      },
+      {
+        "title": "Lo-fi 🎧☕🌙",
+        "url": "https://stream.example.com/lofi",
+        "preload": null
+      }
+    ],
+    "activeSlot": 0,
+    "station": "विविध भारती - आकाशवाणी का मनोरंजन चैनल, चौबीसों घंटे",
+    "title": "周杰伦 - 晴天",
+    "titleDim": false,
+    "bitrate": 128,
+    "samplerate": 44100,
+    "channels": 2,
+    "elapsed": 754
+  },
+  "playlist": [
+    {
+      "id": 1,
+      "title": "米津玄師 - Lemon (レモン)",
+      "path": "C:\\Music\\lemon.flac",
+      "duration": 256,
+      "missing": false
+    },
+    {
+      "id": 2,
+      "title": "아이유 - 좋은 날",
+      "path": "C:\\Music\\iu.mp3",
+      "duration": 233,
+      "missing": false
+    },
+    {
+      "id": 3,
+      "title": "ฟังเพลงไทย - คิดถึงเธอที่สุด",
+      "path": "C:\\Music\\thai.mp3",
+      "duration": 240,
+      "missing": false
+    },
+    {
+      "id": 4,
+      "title": "Sơn Tùng M-TP - Chúng Ta Của Hiện Tại · Café Z̤͔ͧ̑a̴lgo",
+      "path": "C:\\Music\\vn.mp3",
+      "duration": 301,
+      "missing": false
+    },
+    {
+      "id": 5,
+      "title": "Chill 🎧 Lo-fi Beats ☕ 👩🏽‍💻 🇫🇷",
+      "url": "https://stream.example.com/lofi",
+      "duration": null,
+      "missing": false
+    }
+  ]
+}

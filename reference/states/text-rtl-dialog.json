@@ -1,0 +1,14 @@
+{
+  "extends": "dialog-edit-cartridge",
+  "description": "Edit cartridge with an Arabic name in the text box (qust-text): editable text can't be reordered beforehand, so this is what GPUI itself does with right-to-left text.",
+  "state": {
+    "cartridges": [
+      { "title": "إذاعة القرآن الكريم - القاهرة", "url": "http://stream.radiojar.com/8s5u5tpdtwzuv", "preload": null },
+      { "title": "FIP", "url": "https://icecast.radiofrance.fr/fip-hifi.aac", "preload": null },
+      null, null, null, null
+    ],
+    "station": "إذاعة القرآن الكريم - القاهرة"
+  },
+  "times": [250],
+  "scales": [1]
+}
