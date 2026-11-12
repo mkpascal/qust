@@ -40,7 +40,13 @@ pub fn open(kind: PanelKind, cx: &mut App) {
     if let Some(panel) = inner.panel(kind) {
         if inner.mode == WindowMode::Normal {
             let hwnd = panel.hwnd;
-            app::outside(cx, move || qust_shell::window::bring_to_front(hwnd));
+            let owner = inner.player_hwnd();
+            app::outside(cx, move || {
+                qust_shell::window::bring_to_front(hwnd);
+                if let Some(owner) = owner {
+                    win::leave_if_covered(owner);
+                }
+            });
         }
         return;
     }
@@ -118,7 +124,10 @@ pub fn open(kind: PanelKind, cx: &mut App) {
         }
         if mode == WindowMode::Normal {
             #[cfg(windows)]
-            qust_shell::window::bring_to_front(hwnd);
+            {
+                qust_shell::window::bring_to_front(hwnd);
+                win::leave_if_covered(owner);
+            }
             #[cfg(not(windows))]
             let _ = handle.update(_cx, |_, window, _| window.activate_window());
         }

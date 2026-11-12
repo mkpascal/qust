@@ -24,6 +24,25 @@ mod imp {
         unsafe { IsWindow(Some(h(window))).as_bool() }
     }
 
+    // When the pointer is no longer over `window` (a panel just opened over it, under a pointer
+    // that hasn't moved), tells it the pointer left, as the browser did: Windows only sends
+    // WM_MOUSELEAVE once the pointer moves, and until then the button under it stays hovered.
+    pub fn leave_if_covered(window: isize) {
+        use windows::Win32::Foundation::{LPARAM, POINT, WPARAM};
+        unsafe {
+            let mut cursor = POINT::default();
+            if GetCursorPos(&mut cursor).is_err() {
+                return;
+            }
+            let under = WindowFromPoint(cursor);
+            if under.is_invalid() || GetAncestor(under, GA_ROOT) != h(window) {
+                // WM_MOUSELEAVE (in the windows crate's Controls module).
+                const WM_MOUSELEAVE: u32 = 0x02A3;
+                let _ = PostMessageW(Some(h(window)), WM_MOUSELEAVE, WPARAM(0), LPARAM(0));
+            }
+        }
+    }
+
     // Milliseconds since this process was created (start-up measurements).
     pub fn process_age_ms() -> f64 {
         use windows::Win32::Foundation::FILETIME;
@@ -52,6 +71,8 @@ mod imp {
     pub fn is_window(_window: isize) -> bool {
         true
     }
+
+    pub fn leave_if_covered(_window: isize) {}
 }
 
 pub use imp::*;

@@ -90,3 +90,30 @@
              context.runs.push(ShapedRun { font_id, glyphs });
          }
          Ok(())
+--- a/src/events.rs
++++ b/src/events.rs
+@@ -405,6 +405,24 @@ impl WindowsWindowInner {
+                 .set(Some(callback));
+         }
+ 
++        // QUST PATCH (re-apply when bumping GPUI): the pointer is no longer over this window (it left, or another window now
++        // covers it, such as a panel opened by a click), so nothing in it is hovered any more:
++        // a move to a point outside the window makes GPUI hit-test again, which clears hover
++        // styles and hides tooltips, as a browser's mouseleave does. GPUI alone keeps the last
++        // position, and the element under it stays hovered until the pointer comes back.
++        let outside = logical_point(-1.0, -1.0, 1.0);
++        if self.state.mouse_position.get() != outside {
++            self.state.mouse_position.set(outside);
++            if let Some(mut func) = self.state.callbacks.input.take() {
++                func(PlatformInput::MouseMove(MouseMoveEvent {
++                    position: outside,
++                    pressed_button: None,
++                    modifiers: current_modifiers(),
++                }));
++                self.state.callbacks.input.set(Some(func));
++            }
++        }
++
+         Some(0)
+     }
+ 

@@ -23,7 +23,7 @@
   - Native Rust core: the whole audio and stream engine is compiled native code, so it starts instantly, decodes efficiently and uses very little CPU and memory,
   - Built-in stream engine: its own engine reads song titles and stream details directly,
   - Native interface: drawn by the GPU with GPUI, all in Rust, with no web engine or browser underneath,
-  - Small and light: a 3.5 MB installer, with nothing extra bundled,
+  - Small and self-contained: a 6 MB installer, with nothing else to install,
   - Features a cartridge-loading concept: six slots, saved with your volume, balance and settings,
   - Playlist drawer: drop music files, folders or .m3u / .pls lists, or add any stream or online audio file. Files play from where they are, with seeking,
   - Reconnects by itself when a stream drops or stalls,

@@ -44,16 +44,18 @@ members = [
 # The patched GPUI crate below is a dependency, not a member.
 exclude = ["vendor/gpui-pre-windows"]
 
-# Right-to-left text on Windows. gpui-pre-windows 0.3.12's DirectWrite renderer (DrawGlyphRun in
-# src/direct_write.rs) ignores each run's origin and bidi level and lays every glyph left to
-# right, so Arabic or Hebrew text in a text box (and any line GPUI shapes itself) comes out
-# mirrored. vendor/gpui-pre-windows is the registry's 0.3.12 with vendor/gpui-pre-windows.patch
-# applied (two hunks in direct_write.rs plus comments, nothing else): glyphs are placed from the
-# run's origin, leftwards for right-to-left runs, and the line's runs sorted by position.
-# Left-to-right text lays out exactly as before. qust-app turns on qust-text's "native-bidi",
-# which relies on this. When GPUI is bumped (gpui-pre, gpui-pre-platform and gpui-component move
-# together), re-apply the patch to the new gpui-pre-windows and replace the copy, or drop both
-# once upstream lays right-to-left runs out itself.
+# GPUI's Windows platform crate, patched: vendor/gpui-pre-windows is the registry's 0.3.12 with
+# vendor/gpui-pre-windows.patch applied (each change marked "QUST PATCH"):
+# - Right-to-left text (two hunks in src/direct_write.rs). DrawGlyphRun ignored each run's origin
+#   and bidi level and laid every glyph left to right, so Arabic or Hebrew text in a text box (and
+#   any line GPUI shapes itself) came out mirrored. Glyphs are now placed from the run's origin,
+#   leftwards for right-to-left runs, and the line's runs sorted by position; left-to-right text
+#   lays out exactly as before. qust-app turns on qust-text's "native-bidi", which relies on this.
+# - Hover cleared when the pointer leaves (src/events.rs, WM_MOUSELEAVE): GPUI kept the last
+#   position, so the button under it stayed hovered (and re-showed its tooltip) after the
+#   pointer left or a window opened over it.
+# When GPUI is bumped (gpui-pre, gpui-pre-platform and gpui-component move together), re-apply the
+# patch to the new gpui-pre-windows and replace the copy, or drop it once upstream does both.
 [patch.crates-io]
 gpui-pre-windows = { path = "vendor/gpui-pre-windows" }
 

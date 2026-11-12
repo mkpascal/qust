@@ -124,8 +124,8 @@ mod native {
         TTM_SETMAXTIPWIDTH, TTM_TRACKACTIVATE, TTM_TRACKPOSITION, TTM_UPDATETIPTEXTW, TTS_NOPREFIX, TTTOOLINFOW,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, GetCursorInfo, GetCursorPos, GetIconInfo, IsWindow, SendMessageW, SetWindowPos, CURSORINFO, HWND_TOPMOST, ICONINFO,
-        SWP_NOACTIVATE, SWP_NOSIZE, WINDOW_EX_STYLE, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+        CreateWindowExW, DestroyWindow, GetAncestor, GetCursorInfo, GetCursorPos, GetIconInfo, IsWindow, SendMessageW, SetWindowPos, WindowFromPoint, CURSORINFO, GA_ROOT,
+        HWND_TOPMOST, ICONINFO, SWP_NOACTIVATE, SWP_NOSIZE, WINDOW_EX_STYLE, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
     };
 
     pub const SUPPORTED: bool = true;
@@ -242,12 +242,21 @@ mod native {
 
     pub fn show(text: &str, generation: u64, window: &Window) {
         let Some(owner) = owner_of(window) else { return };
+        let mut cursor = POINT::default();
+        unsafe {
+            let _ = GetCursorPos(&mut cursor);
+            // Only while the pointer is over this window itself: when another window covers it
+            // (a panel a click just opened, under a pointer that hasn't moved since), GPUI still
+            // takes the element as hovered, and the browser would show nothing.
+            let under = WindowFromPoint(cursor);
+            if under.is_invalid() || GetAncestor(under, GA_ROOT) != owner {
+                return;
+            }
+        }
         let Some(tooltip) = control(owner) else { return };
         unsafe {
             let mut wide: Vec<u16> = text.encode_utf16().chain(Some(0)).collect();
             let info = tool(owner, &mut wide);
-            let mut cursor = POINT::default();
-            let _ = GetCursorPos(&mut cursor);
             let monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
             let mut monitor_info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
             let work: RECT = if GetMonitorInfoW(monitor, &mut monitor_info).as_bool() { monitor_info.rcWork } else { RECT { left: 0, top: 0, right: 1920, bottom: 1080 } };
