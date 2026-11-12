@@ -1,15 +1,27 @@
 name: Build
 
 # Every push to main builds Windows and macOS. When the version in Cargo.toml ([workspace.package])
-# has no release
-# yet, the push also publishes a GitHub release "Qust vX.Y.Z" with the installers and the signed
+# has no release yet, the push also publishes a GitHub release "Qust vX.Y.Z" with the installers and the signed
 # updater files (latest.json), which installed copies of Qust update from: the GPUI versions and
 # the Tauri ones before them read the same latest.json.
+#
+# Pushes that change only documentation, screenshots or the reference material build nothing
+# (paths-ignore); a commit with [skip ci] in its message skips the build too.
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'assets/**'
+      - 'reference/**'
+      - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'assets/**'
+      - 'reference/**'
+      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:
