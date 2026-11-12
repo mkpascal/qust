@@ -2,7 +2,7 @@
 # `version.workspace = true`, and its build.rs gives it to the code, the executable's version
 # information and Settings; CI reads it to name the release.
 [workspace.package]
-version = "1.2.0"
+version = "1.2.1"
 authors = ["Pascal Muang Khot"]
 license = "GPL-3.0-or-later"
 repository = "https://github.com/mkpascal/qust"
