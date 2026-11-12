@@ -1,6 +1,6 @@
 [package]
 name = "qust"
-version = "1.1.4"
+version = "1.1.5"
 description = "Quick Streaming Player"
 authors = ["Pascal Muang Khot"]
 license = "GPL-3.0-or-later"
