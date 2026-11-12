@@ -1,11 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod background;
+mod menu;
+mod player;
 mod playlist;
-mod proxy;
 mod shortcuts;
 mod store;
 mod updater;
+mod visualizer;
 
 use tauri::window::Color;
 use tauri::{AppHandle, Manager, RunEvent, State, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
@@ -39,7 +41,6 @@ fn main() {
         ))
         .manage(shortcuts::Shortcuts::default())
         .manage(updater::Updates::default())
-        .manage(background::PlayRequest::default())
         .invoke_handler(tauri::generate_handler![
             store::get_data,
             store::set_data,
@@ -52,12 +53,30 @@ fn main() {
             updater::install_update,
             background::get_background,
             background::set_background,
-            background::take_play_request,
-            proxy::stream_info,
-            proxy::icecast_title,
+            player::player_attach,
+            player::player_play,
+            player::player_pause,
+            player::player_stop,
+            player::player_seek,
+            player::player_set_volume,
+            player::player_set_balance,
+            player::player_set_instant,
+            player::player_cycle_colors,
+            player::player_status,
+            player::cartridge_play,
+            player::cartridge_save,
+            player::cartridge_eject,
+            player::cartridge_move,
+            player::playlist_play,
+            player::playlist_add_url,
+            player::playlist_add_files,
+            player::playlist_drop,
+            player::playlist_remove,
+            player::playlist_move,
+            player::playlist_edit,
+            player::stream_info,
             playlist::set_playlist_open,
-            playlist::expand_paths,
-            playlist::pick_files,
+            menu::popup_menu,
             open_panel,
             set_theme
         ])
@@ -66,16 +85,23 @@ fn main() {
             if window.label() == "settings" && matches!(event, WindowEvent::Destroyed) {
                 shortcuts::set_paused(window.app_handle(), false);
             }
+            // Playback doesn't outlive the player window (Qust may stay in the tray).
+            if window.label() == "main" && matches!(event, WindowEvent::Destroyed) {
+                window.app_handle().state::<player::Player>().detach();
+            }
             if let (WindowEvent::ThemeChanged(theme), Some(window)) = (event, window.app_handle().get_webview_window(window.label())) {
                 let _ = window.set_background_color(Some(background(*theme)));
             }
         })
         .setup(|app| {
-            app.manage(store::Store::load(app.handle())?);
-            let (proxy, files) = proxy::start()?;
+            let store = store::Store::load(app.handle())?;
+            let player = player::Player::start(store.clone(), player::TauriHost(app.handle().clone()), qust_audio::OutputKind::Device);
+            // Settings written by the Settings window take effect at once.
+            let watcher = player.clone();
+            store.watch(move |key, value| watcher.setting_changed(key, value.cloned()));
+            app.manage(store);
+            app.manage(player);
             let config = serde_json::json!({
-                "proxy": proxy,
-                "files": files,
                 "accent": accent(),
                 "debug": cfg!(debug_assertions),
             });
@@ -136,11 +162,8 @@ fn build_window(
     }
     #[cfg(windows)]
     {
-        // Every webview shares one browser process, so they all need the same arguments. Media may
-        // start from a global shortcut, without a click in the window.
-        builder = builder.additional_browser_args(
-            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required",
-        );
+        // Every webview shares one browser process, so they all need the same arguments.
+        builder = builder.additional_browser_args("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection");
     }
     let window = builder.build()?;
     if let Ok(theme) = window.theme() {

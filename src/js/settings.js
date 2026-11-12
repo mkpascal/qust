@@ -1,5 +1,5 @@
-// The settings window. Every change is saved and broadcast as a `settings-changed` event, which
-// the player (script.js) applies right away.
+// The settings window. Every change is saved to the store, where the Rust player picks it up right
+// away, and broadcast as a `settings-changed` event for the other windows.
 
 const THEMES = { system: 'Use system setting', light: 'Light', dark: 'Dark' };
 const COLORS = { classic: 'Classic', white: 'White', accent: 'Accent color', off: 'Off' };
@@ -7,7 +7,6 @@ const COLORS = { classic: 'Classic', white: 'White', accent: 'Accent color', off
 const RECONNECT = { 1: '1 minute', 5: '5 minutes', 15: '15 minutes', 30: '30 minutes', 60: '1 hour', 0: 'Until stopped' };
 
 const { Menu } = window.__TAURI__.menu;
-const { LogicalPosition } = window.__TAURI__.dpi;
 const { emit } = window.__TAURI__.event;
 const settingsWindow = window.__TAURI__.window.getCurrentWindow();
 
@@ -43,7 +42,7 @@ async function showChoices(button, choices, current, choose) {
         action: () => choose(value),
     }));
     const menu = await Menu.new({ items });
-    await menu.popup(new LogicalPosition(rect.left, rect.bottom + 2));
+    await popupMenu(menu, rect.left, rect.bottom + 2);
 }
 
 themeCombo.addEventListener('click', () => showChoices(themeCombo, THEMES, settings.theme, (theme) => {

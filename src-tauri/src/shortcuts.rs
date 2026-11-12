@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
-// (action, storage key, default). Pressing the shortcut emits "<action>-action" to the windows.
+// (action, storage key, default). Pressing the shortcut is that action for the player.
 // Play/Stop ("toggle") starts unassigned: one key that follows Qust's state, for a single
 // Stream Deck button that can't get out of sync.
 const ACTIONS: [(&str, &str, &str); 3] = [

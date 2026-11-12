@@ -1,23 +1,20 @@
 // The background helper: with "background" on, Qust starts with Windows in the system tray with no
 // window (--background), keeps running in the tray when the player is closed, and opens the player
 // when a Play or Play / Stop / Start shortcut is pressed. The helper is this same process, just
-// without windows: the shortcuts, store and proxy keep running.
+// without windows: the shortcuts, store and player thread keep running (the player plays nothing
+// without its window, and its audio engine starts with the first window).
 
+use crate::player::Player;
 use crate::store::Store;
 use serde_json::{json, Value};
-use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
 pub const LAUNCH_ARG: &str = "--background";
 pub const TOGGLE_ARG: &str = "--toggle";
 const TRAY_ID: &str = "qust";
-
-// Set when the player is opened to play: its page asks for it once loaded (take_play_request).
-#[derive(Default)]
-pub struct PlayRequest(AtomicBool);
 
 // Only the installed version can be the helper. Test and portable builds share the installed
 // copy's settings, so they ignore the setting rather than act on (or rewrite) its startup entry.
@@ -40,11 +37,12 @@ pub fn show_player(app: &AppHandle, play: bool) {
         let _ = window.show();
         let _ = window.set_focus();
         if play {
-            let _ = app.emit("play-action", ());
+            app.state::<Player>().action("play");
         }
         return;
     }
-    app.state::<PlayRequest>().0.store(play, Ordering::SeqCst);
+    // It plays once its page has attached.
+    app.state::<Player>().request_play(play);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(error) = crate::build_player(&app) {
@@ -55,9 +53,9 @@ pub fn show_player(app: &AppHandle, play: bool) {
 
 // A shortcut or tray action. With the player closed, Play and Play / Stop / Start open it and
 // play; Stop has nothing to do.
-pub fn player_action(app: &AppHandle, action: &str) {
+pub fn player_action(app: &AppHandle, action: &'static str) {
     if app.get_webview_window("main").is_some() {
-        let _ = app.emit(&format!("{action}-action"), ());
+        app.state::<Player>().action(action);
     } else if action == "play" || action == "toggle" {
         show_player(app, true);
     }
@@ -126,9 +124,4 @@ pub fn set_background(app: AppHandle, enabled: bool) -> Result<Value, String> {
         let _ = app.remove_tray_by_id(TRAY_ID);
     }
     Ok(describe(&app))
-}
-
-#[tauri::command]
-pub fn take_play_request(app: AppHandle) -> bool {
-    app.state::<PlayRequest>().0.swap(false, Ordering::SeqCst)
 }

@@ -1,8 +1,7 @@
-// The playlist (script.js): the drawer under the player, and turning dropped or picked files,
-// folders and .m3u / .pls lists into playlist entries. Files are played where they are, through
-// the file server in proxy.rs; nothing is copied.
+// The playlist drawer under the player, and turning dropped or picked files, folders and
+// .m3u / .pls lists into playlist entries (the player adds them, player/commands.rs). Files are
+// played where they are; nothing is copied.
 
-use crate::proxy;
 use crate::store::Store;
 use serde_json::{json, Value};
 use std::fs;
@@ -18,7 +17,7 @@ pub const PLAYER_HEIGHT: f64 = 267.0;
 // The drawer's height, added under the player when it's open. Matches --drawer-height in style.css.
 pub const DRAWER_HEIGHT: f64 = 320.0;
 
-const AUDIO_EXTENSIONS: &[&str] = &["mp3", "m4a", "aac", "mp4", "ogg", "oga", "opus", "flac", "wav", "webm", "weba"];
+pub const AUDIO_EXTENSIONS: &[&str] = &["mp3", "m4a", "aac", "mp4", "ogg", "oga", "opus", "flac", "wav", "webm", "weba"];
 const LIST_EXTENSIONS: &[&str] = &["m3u", "m3u8", "pls"];
 const MAX_ENTRIES: usize = 10_000;
 const MAX_DEPTH: u32 = 16;
@@ -80,43 +79,29 @@ fn animate(window: WebviewWindow, to: f64) {
 // Dropped paths (files, folders, .m3u / .pls lists) as playlist entries: { path, title } for a
 // file, { url, title } for a stream from a list. Folders are added in name order, with their
 // subfolders; lists found inside folders are skipped, so their files aren't added twice.
-#[tauri::command]
-pub async fn expand_paths(paths: Vec<String>) -> Vec<Value> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut entries = Vec::new();
-        for path in paths {
-            add(Path::new(&path), &mut entries, 0);
-        }
-        entries
-    })
-    .await
-    .unwrap_or_default()
+// Blocking: run it off the main thread.
+pub fn expand(paths: &[PathBuf]) -> Vec<Value> {
+    let mut entries = Vec::new();
+    for path in paths {
+        add(path, &mut entries, 0);
+    }
+    entries
 }
 
-// "Add file": the system file picker, then the same as dropping the picked files.
-#[tauri::command]
-pub async fn pick_files(window: WebviewWindow) -> Vec<Value> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let all: Vec<&str> = AUDIO_EXTENSIONS.iter().chain(LIST_EXTENSIONS).copied().collect();
-        let picked = window
-            .dialog()
-            .file()
-            .set_parent(&window)
-            .set_title("Add to playlist")
-            .add_filter("Audio files and playlists", &all)
-            .add_filter("All files", &["*"])
-            .blocking_pick_files()
-            .unwrap_or_default();
-        let mut entries = Vec::new();
-        for file in picked {
-            if let Ok(path) = file.into_path() {
-                add(&path, &mut entries, 0);
-            }
-        }
-        entries
-    })
-    .await
-    .unwrap_or_default()
+// "Add file": the system file picker, then the same as dropping the picked files. Blocking.
+pub fn pick(window: &WebviewWindow) -> Vec<Value> {
+    let all: Vec<&str> = AUDIO_EXTENSIONS.iter().chain(LIST_EXTENSIONS).copied().collect();
+    let picked = window
+        .dialog()
+        .file()
+        .set_parent(window)
+        .set_title("Add to playlist")
+        .add_filter("Audio files and playlists", &all)
+        .add_filter("All files", &["*"])
+        .blocking_pick_files()
+        .unwrap_or_default();
+    let paths: Vec<PathBuf> = picked.into_iter().filter_map(|file| file.into_path().ok()).collect();
+    expand(&paths)
 }
 
 fn extension(path: &Path) -> String {
@@ -215,7 +200,7 @@ fn list_entry(dir: &Path, location: &str, title: Option<String>, duration: Optio
     // file:///C:/Music/a.mp3 on Windows, file:///Users/me/a.mp3 on macOS
     let location = match lower.strip_prefix("file://") {
         Some(_) => {
-            let decoded = proxy::decode(&location[7..]).unwrap_or_default();
+            let decoded = decode(&location[7..]).unwrap_or_default();
             if cfg!(windows) { decoded.trim_start_matches('/').to_string() } else { decoded }
         }
         None => location.to_string(),
@@ -224,4 +209,21 @@ fn list_entry(dir: &Path, location: &str, title: Option<String>, duration: Optio
     if path.is_file() && AUDIO_EXTENSIONS.contains(&extension(&path).as_str()) {
         entries.push(file_entry(&path, title, duration));
     }
+}
+
+// Percent-decoding, as decodeURIComponent (None for a broken escape or bytes that aren't UTF-8).
+pub fn decode(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            out.push(u8::from_str_radix(text.get(i + 1..i + 3)?, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
 }

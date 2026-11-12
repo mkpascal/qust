@@ -1,0 +1,15 @@
+[package]
+name = "qust-audio"
+version = "0.1.0"
+description = "Qust's audio engine: sources, decoding, mixing and output"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]
+symphonia = { version = "0.6.1", features = ["all"] }
+cpal = "0.18.2"
+rubato = "5.0.1"
+ureq = "2"
+url = "2"
+serde_json = "1"

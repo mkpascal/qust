@@ -24,23 +24,9 @@ async function loadData(key) {
     return value === null ? undefined : value;
 }
 
-function proxied(url) {
-    return QUST.proxy + '?url=' + encodeURIComponent(url);
-}
-
-// A local file (a playlist entry), served where it is by the file server in proxy.rs.
-function fileUrl(path) {
-    return QUST.files + '?path=' + encodeURIComponent(path);
-}
-
-// The proxy's details for a stream it relays (proxy.rs), and the title from the server's Icecast
-// status page. Both through IPC, so they never wait behind the stream connections.
+// The details of the stream or file playing (title, format, byte counts…), by its URL or path.
 function streamDetails(url) {
     return invoke('stream_info', { url });
-}
-
-function icecastTitle(url) {
-    return invoke('icecast_title', { url });
 }
 
 // Global shortcuts are stored as accelerators built from KeyboardEvent.code ("Ctrl+Alt+KeyH").
@@ -49,6 +35,12 @@ function shortcutKeys(accelerator) {
     const names = { Super: 'Win', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Backquote: '`' };
     return accelerator.split('+').map((part) =>
         names[part] || part.replace(/^Key([A-Z])$/, '$1').replace(/^Digit(\d)$/, '$1').replace(/^Numpad/, 'Num '));
+}
+
+// Shows a native menu, at the cursor or at a position in the window. Not menu.popup(): the clock
+// and the analyzer would freeze behind the open menu (see menu.rs).
+function popupMenu(menu, x, y) {
+    return invoke('popup_menu', { rid: menu.rid, x, y });
 }
 
 // Right-click never shows the browser's menu. Text fields get a native edit menu and values
@@ -71,7 +63,7 @@ document.addEventListener('contextmenu', async (event) => {
         items = [{ item: 'Copy' }];
     }
     const menu = await window.__TAURI__.menu.Menu.new({ items });
-    await menu.popup();
+    await popupMenu(menu);
 });
 
 // No reload, find or print.

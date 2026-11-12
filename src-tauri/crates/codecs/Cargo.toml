@@ -1,0 +1,22 @@
+[package]
+name = "qust-codecs"
+version = "0.1.0"
+description = "Audio decoders Symphonia lacks: Opus, and HE-AAC through the system decoder"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]
+symphonia = { version = "0.6.1", features = ["all"] }
+# Pure-Rust libopus port. "analysis" (on by default) is the encoder's speech/music analysis.
+opus1 = { version = "0.3.0", default-features = false, features = ["std", "heap"] }
+
+[target."cfg(windows)".dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com",
+] }
+
+[dev-dependencies]
+ureq = "2"

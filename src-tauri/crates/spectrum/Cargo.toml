@@ -1,0 +1,9 @@
+[package]
+name = "qust-spectrum"
+version = "0.1.0"
+description = "Qust's spectrum analyzer: analysis and the frames the page draws"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]

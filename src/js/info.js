@@ -1,10 +1,10 @@
-// The Stream information window. The player (script.js) broadcasts its status as `player-status`;
-// the stream's details come from the proxy's /info endpoint (proxy.rs), polled every second.
+// The Stream information window. The player (Rust) broadcasts its status as `player-status` every
+// second and on changes, and `player_status` gives it when this window opens; the details of what
+// plays come from `stream_info` (streamDetails), polled every second.
 
 const STATES = { stopped: 'Stopped', connecting: 'Connecting', buffering: 'Buffering', playing: 'Playing', paused: 'Paused' };
 const FORMATS = { 'audio/mpeg': 'MP3', 'audio/aac': 'AAC', 'audio/aacp': 'AAC+', 'audio/ogg': 'Ogg', 'application/ogg': 'Ogg', 'audio/flac': 'FLAC', 'audio/opus': 'Opus' };
 
-const { emit } = window.__TAURI__.event;
 const infoWindow = window.__TAURI__.window.getCurrentWindow();
 
 let status = {};
@@ -89,15 +89,24 @@ async function poll() {
     render();
 }
 
-listen('player-status', ({ payload }) => {
-    const changed = payload.url !== status.url || payload.state !== status.state;
-    status = payload;
+function update(next) {
+    const changed = next.url !== status.url || next.state !== status.state;
+    status = next;
     if (changed) poll();
     else render();
+}
+
+// The status as the window opens, unless a broadcast (newer) got here first.
+let broadcast = false;
+listen('player-status', ({ payload }) => {
+    broadcast = true;
+    update(payload);
+});
+invoke('player_status').then((payload) => {
+    if (!broadcast && payload) update(payload);
 });
 
 setInterval(poll, 1000);
-emit('player-status-request');
 render();
 
 document.addEventListener('keydown', (event) => {
