@@ -73,11 +73,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
-        with:
 
-      # GPUI needs the Windows SDK's fxc.exe and rc.exe, which the runner image has. NSIS is
-      # installed on the image too (build-installer.mjs finds it in Program Files).
+      # GPUI needs the Windows SDK's fxc.exe and rc.exe, which the runner image has.
       - run: cargo build --release --locked -p qust-app
+
+      # NSIS for the installer (build-installer.mjs looks in Program Files), unless the image has it.
+      - run: |
+          if [ ! -f "/c/Program Files (x86)/NSIS/makensis.exe" ] && [ ! -f "/c/Program Files/NSIS/makensis.exe" ] && ! command -v makensis; then
+            choco install nsis -y --no-progress
+          fi
 
       - run: node packaging/windows/build-installer.mjs --exe "target/release/qust.exe" --version "$VERSION" --icon "icons/icon.ico" --out dist
 
@@ -107,7 +111,6 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - uses: swatinem/rust-cache@v2
-        with:
 
       - run: |
           cargo build --release --locked -p qust-app --target aarch64-apple-darwin
@@ -133,9 +136,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # Windows alone is enough to publish: macOS is best effort, and a failed macOS build must not hold
+  # back the Windows release (latest.json then has no macOS entry, and Macs stay where they are).
   publish:
     needs: [release, windows, macos]
-    if: needs.release.outputs.id
+    if: always() && needs.release.outputs.id && needs.windows.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -152,15 +157,17 @@ jobs:
 
       # latest.json lists each file under both updaters' platform keys, with its signature.
       - run: |
+          mac="dist/Qust_${VERSION}_universal.app.tar.gz"
+          if [ -f "$mac" ] && [ -f "$mac.sig" ]; then macos=(--macos "$mac"); else macos=(--allow-missing); fi
           node packaging/latest-json.mjs --version "$VERSION" \
-            --windows "dist/Qust_${VERSION}_x64-setup.exe" \
-            --macos "dist/Qust_${VERSION}_universal.app.tar.gz" \
+            --windows "dist/Qust_${VERSION}_x64-setup.exe" "${macos[@]}" \
             --out dist/latest.json
 
       - run: |
-          gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
-            "dist/Qust_${VERSION}_x64-setup.exe" "dist/Qust_${VERSION}_x64-setup.exe.sig" \
-            "dist/Qust_${VERSION}_universal.dmg" \
-            "dist/Qust_${VERSION}_universal.app.tar.gz" "dist/Qust_${VERSION}_universal.app.tar.gz.sig" \
-            dist/latest.json
+          files=()
+          for name in "Qust_${VERSION}_x64-setup.exe" "Qust_${VERSION}_x64-setup.exe.sig" "Qust_${VERSION}_universal.dmg" \
+            "Qust_${VERSION}_universal.app.tar.gz" "Qust_${VERSION}_universal.app.tar.gz.sig" latest.json; do
+            if [ -f "dist/$name" ]; then files+=("dist/$name"); fi
+          done
+          gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
           gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest
