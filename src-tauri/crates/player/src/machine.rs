@@ -1,4 +1,4 @@
-// The player's state, on its own thread (mod.rs). A port of the old page's player (script.js):
+// The player's state, on its own thread (lib.rs). A port of the old page's player (script.js):
 // the same functions under the same names where they still exist, the same constants, the same
 // store keys. An <audio> element there is a stream in the engine here, under the same key.
 

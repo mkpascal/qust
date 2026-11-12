@@ -1,0 +1,31 @@
+{
+  "version": "1.1.4",
+  "notes": "",
+  "pub_date": "2026-11-09T08:13:59.187Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSUEdoUll5UDBKRkFlcDVUQXBKbVZiZlZ4cUpXSkdTMWNWZzZYK2xGMXRBZGJTdTY2K1Y1c3F2QnUrZjg0bnc0OCtUdXpLc3JwWFdUY0NYQk1EaUhZdkRpS1lTRk41Y1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MjExOTAxCWZpbGU6UXVzdF8xLjEuNF94NjQtc2V0dXAuZXhlCXZlcnNpb246MS4xLjQKUXR0M1ROdFpZMWZRWk9CNzVxR3pGSVhBZklrc09MVk94RFFrNzJnTlB2NS8wZFNxOE1TVjNvNWRjZThtREFCWGs1d3l6QnZXQzN4YU9mS2wwSjNYQ3c9PQo=",
+      "url": "https://github.com/mkpascal/qust/releases/latest/download/Qust_1.1.4_x64-setup.exe"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSUEdoUll5UDBKRkFlcDVUQXBKbVZiZlZ4cUpXSkdTMWNWZzZYK2xGMXRBZGJTdTY2K1Y1c3F2QnUrZjg0bnc0OCtUdXpLc3JwWFdUY0NYQk1EaUhZdkRpS1lTRk41Y1EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MjExOTAxCWZpbGU6UXVzdF8xLjEuNF94NjQtc2V0dXAuZXhlCXZlcnNpb246MS4xLjQKUXR0M1ROdFpZMWZRWk9CNzVxR3pGSVhBZklrc09MVk94RFFrNzJnTlB2NS8wZFNxOE1TVjNvNWRjZThtREFCWGs1d3l6QnZXQzN4YU9mS2wwSjNYQ3c9PQo=",
+      "url": "https://github.com/mkpascal/qust/releases/latest/download/Qust_1.1.4_x64-setup.exe"
+    },
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSUEdoUll5UDBKRkVnaHFqRUpyL2duMHViU1hRcVBQMWdkTEdYUFQ3UUZHa0NsVTdrQlNSWkdseTdxazQwcWo3NXdIZCtWc3VKU3ViWHhGM29rOU96b1k4cFdETjZlbUFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MjEyMDM1CWZpbGU6UXVzdC5hcHAudGFyLmd6CXZlcnNpb246MS4xLjQKbXV5VG9ydGtMWlBiNSsrMXlGb2VsNURQbW5UdWt0d0VrWVdSS3NaaUIzQjRCS1BxWXV1ZzhkNzBjWVhEdkZYUE1uanNhbHRrdzluSW5obWtCZzZqQkE9PQo=",
+      "url": "https://github.com/mkpascal/qust/releases/latest/download/Qust_universal.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSUEdoUll5UDBKRkVnaHFqRUpyL2duMHViU1hRcVBQMWdkTEdYUFQ3UUZHa0NsVTdrQlNSWkdseTdxazQwcWo3NXdIZCtWc3VKU3ViWHhGM29rOU96b1k4cFdETjZlbUFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MjEyMDM1CWZpbGU6UXVzdC5hcHAudGFyLmd6CXZlcnNpb246MS4xLjQKbXV5VG9ydGtMWlBiNSsrMXlGb2VsNURQbW5UdWt0d0VrWVdSS3NaaUIzQjRCS1BxWXV1ZzhkNzBjWVhEdkZYUE1uanNhbHRrdzluSW5obWtCZzZqQkE9PQo=",
+      "url": "https://github.com/mkpascal/qust/releases/latest/download/Qust_universal.app.tar.gz"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSUEdoUll5UDBKRkVnaHFqRUpyL2duMHViU1hRcVBQMWdkTEdYUFQ3UUZHa0NsVTdrQlNSWkdseTdxazQwcWo3NXdIZCtWc3VKU3ViWHhGM29rOU96b1k4cFdETjZlbUFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MjEyMDM1CWZpbGU6UXVzdC5hcHAudGFyLmd6CXZlcnNpb246MS4xLjQKbXV5VG9ydGtMWlBiNSsrMXlGb2VsNURQbW5UdWt0d0VrWVdSS3NaaUIzQjRCS1BxWXV1ZzhkNzBjWVhEdkZYUE1uanNhbHRrdzluSW5obWtCZzZqQkE9PQo=",
+      "url": "https://github.com/mkpascal/qust/releases/latest/download/Qust_universal.app.tar.gz"
+    },
+    "darwin-x86_64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSUEdoUll5UDBKRkVnaHFqRUpyL2duMHViU1hRcVBQMWdkTEdYUFQ3UUZHa0NsVTdrQlNSWkdseTdxazQwcWo3NXdIZCtWc3VKU3ViWHhGM29rOU96b1k4cFdETjZlbUFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MjEyMDM1CWZpbGU6UXVzdC5hcHAudGFyLmd6CXZlcnNpb246MS4xLjQKbXV5VG9ydGtMWlBiNSsrMXlGb2VsNURQbW5UdWt0d0VrWVdSS3NaaUIzQjRCS1BxWXV1ZzhkNzBjWVhEdkZYUE1uanNhbHRrdzluSW5obWtCZzZqQkE9PQo=",
+      "url": "https://github.com/mkpascal/qust/releases/latest/download/Qust_universal.app.tar.gz"
+    }
+  }
+}

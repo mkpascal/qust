@@ -14,10 +14,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
 serde_json = "1"
-url = "2"
-qust-audio = { path = "crates/audio" }
-qust-codecs = { path = "crates/codecs" }
-qust-spectrum = { path = "crates/spectrum" }
+qust-player = { path = "crates/player" }
 tauri-plugin-updater = "2.14.1"
 tauri-plugin-autostart = "2.7.0"
 tauri-plugin-single-instance = "2.5.5"
@@ -30,11 +27,10 @@ opt-level = "s"
 strip = true
 
 [target."cfg(windows)".dependencies]
-windows-registry = "0.100.0"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [workspace]
-members = ["crates/codecs", "crates/audio", "crates/spectrum"]
+members = ["crates/codecs", "crates/audio", "crates/spectrum", "crates/player", "crates/updater"]
 
 # Debug builds decode audio in real time too: without optimization the decoders and the resampler
 # would be many times slower.
@@ -48,4 +44,7 @@ opt-level = 2
 opt-level = 2
 
 [profile.dev.package.qust-spectrum]
+opt-level = 2
+
+[profile.dev.package.qust-player]
 opt-level = 2

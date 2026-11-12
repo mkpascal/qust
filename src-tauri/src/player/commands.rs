@@ -3,7 +3,7 @@
 // thread, and return once the player has handled them and emitted what they changed (the player
 // thread never waits on anything, so that is quick).
 
-use super::{Host, Player};
+use qust_player::{Host, Player};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,42 +32,42 @@ pub fn player_attach(app: AppHandle, frames: Channel<InvokeResponseBody>) -> Val
 
 #[tauri::command(async)]
 pub fn player_play(app: AppHandle) {
-    player(&app).call(|core| core.play());
+    player(&app).play();
 }
 
 #[tauri::command(async)]
 pub fn player_pause(app: AppHandle) {
-    player(&app).call(|core| core.pause());
+    player(&app).pause();
 }
 
 #[tauri::command(async)]
 pub fn player_stop(app: AppHandle) {
-    player(&app).call(|core| core.stop());
+    player(&app).stop();
 }
 
 #[tauri::command(async)]
 pub fn player_seek(app: AppHandle, seconds: f64) {
-    player(&app).call(move |core| core.seek(seconds));
+    player(&app).seek(seconds);
 }
 
 #[tauri::command(async)]
 pub fn player_set_volume(app: AppHandle, value: i64) {
-    player(&app).call(move |core| core.set_volume(value));
+    player(&app).set_volume(value);
 }
 
 #[tauri::command(async)]
 pub fn player_set_balance(app: AppHandle, value: i64) {
-    player(&app).call(move |core| core.set_balance(value));
+    player(&app).set_balance(value);
 }
 
 #[tauri::command(async)]
 pub fn player_set_instant(app: AppHandle, on: bool) {
-    player(&app).call(move |core| core.set_instant(on));
+    player(&app).set_instant(on);
 }
 
 #[tauri::command(async)]
 pub fn player_cycle_colors(app: AppHandle) {
-    player(&app).call(|core| core.cycle_colors());
+    player(&app).cycle_colors();
 }
 
 #[tauri::command(async)]
@@ -77,32 +77,32 @@ pub fn player_status(app: AppHandle) -> Value {
 
 #[tauri::command(async)]
 pub fn cartridge_play(app: AppHandle, slot: usize) {
-    player(&app).call(move |core| core.select_slot(slot));
+    player(&app).select_slot(slot);
 }
 
 #[tauri::command(async)]
 pub fn cartridge_save(app: AppHandle, slot: usize, title: String, url: String) -> Result<(), String> {
-    player(&app).call(move |core| core.save_cartridge(slot, title, url)).unwrap_or(Ok(()))
+    player(&app).save_cartridge(slot, title, url)
 }
 
 #[tauri::command(async)]
 pub fn cartridge_eject(app: AppHandle, slot: usize) {
-    player(&app).call(move |core| core.eject(slot));
+    player(&app).eject(slot);
 }
 
 #[tauri::command(async)]
 pub fn cartridge_move(app: AppHandle, from: usize, to: usize) {
-    player(&app).call(move |core| core.move_cartridge(from, to));
+    player(&app).move_cartridge(from, to);
 }
 
 #[tauri::command(async)]
 pub fn playlist_play(app: AppHandle, id: u64) {
-    player(&app).call(move |core| core.select_entry(id));
+    player(&app).select_entry(id);
 }
 
 #[tauri::command(async)]
 pub fn playlist_add_url(app: AppHandle, url: String, title: String) -> Result<Vec<u64>, String> {
-    player(&app).call(move |core| core.add_url(url, title)).unwrap_or(Ok(Vec::new()))
+    player(&app).add_url(url, title)
 }
 
 // "Add file": the system file picker (blocking, so on a thread of its own), then the files,
@@ -111,42 +111,33 @@ pub fn playlist_add_url(app: AppHandle, url: String, title: String) -> Result<Ve
 pub async fn playlist_add_files(window: WebviewWindow, index: Option<usize>) -> Vec<u64> {
     let app = window.app_handle().clone();
     let items = tauri::async_runtime::spawn_blocking(move || crate::playlist::pick(&window)).await.unwrap_or_default();
-    add(&app, items, index)
+    player(&app).add_entries(items, index)
 }
 
 #[tauri::command]
 pub async fn playlist_drop(app: AppHandle, paths: Vec<String>, index: usize) -> Vec<u64> {
     let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
-    let items = tauri::async_runtime::spawn_blocking(move || crate::playlist::expand(&paths)).await.unwrap_or_default();
-    add(&app, items, Some(index))
-}
-
-fn add(app: &AppHandle, items: Vec<Value>, index: Option<usize>) -> Vec<u64> {
-    if items.is_empty() {
-        return Vec::new();
-    }
-    player(app).call(move |core| core.add_entries(&items, index)).unwrap_or_default()
+    let items = tauri::async_runtime::spawn_blocking(move || qust_player::playlist::expand(&paths)).await.unwrap_or_default();
+    player(&app).add_entries(items, Some(index))
 }
 
 #[tauri::command(async)]
 pub fn playlist_remove(app: AppHandle, ids: Vec<u64>) {
-    player(&app).call(move |core| core.remove_entries(&ids));
+    player(&app).remove_entries(ids);
 }
 
 #[tauri::command(async)]
 pub fn playlist_move(app: AppHandle, ids: Vec<u64>, index: usize) {
-    player(&app).call(move |core| core.move_entries(&ids, index));
+    player(&app).move_entries(ids, index);
 }
 
 #[tauri::command(async)]
 pub fn playlist_edit(app: AppHandle, id: u64, title: String, url: Option<String>) -> Result<(), String> {
-    player(&app).call(move |core| core.edit_entry(id, title, url)).unwrap_or(Ok(()))
+    player(&app).edit_entry(id, title, url)
 }
 
 // The details of a stream or file (the Stream information window), by its bare URL or path.
 #[tauri::command]
 pub fn stream_info(url: String) -> Value {
-    let lower = url.to_ascii_lowercase();
-    let key = if lower.starts_with("http://") || lower.starts_with("https://") { url } else { format!("file:{url}") };
-    qust_audio::info(&key)
+    qust_player::stream_info(url)
 }

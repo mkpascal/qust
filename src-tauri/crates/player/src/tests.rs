@@ -533,9 +533,9 @@ fn instant_switch() {
     assert!(rig.keys().is_empty());
     rig.call(|core| core.set_instant(true));
     assert_eq!(rig.saved("instant-switch"), Some(json!(true)));
-    // Every cartridge streams in the background while stopped.
+    // Every cartridge streams in the background while stopped (a local one can be live already).
     let state = rig.state();
-    assert!(state["cartridges"].as_array().unwrap().iter().all(|cartridge| cartridge["preload"] == "loading"));
+    assert!(state["cartridges"].as_array().unwrap().iter().all(|cartridge| cartridge["preload"] == "loading" || cartridge["preload"] == "live"));
     let state = rig.wait(5.0, "all live", |state| state["cartridges"].as_array().unwrap().iter().all(|cartridge| cartridge["preload"] == "live"));
     assert_eq!(state["instant"], true);
     assert_eq!(rig.keys().len(), 6);
@@ -927,7 +927,7 @@ fn status_for_the_info_window_and_the_icecast_title() {
     sleep(1.2);
     assert!(rig.events("player-status").len() >= 2);
     // What the info window reads, by the bare URL.
-    let details = crate::player::stream_info(server.url("/mount"));
+    let details = crate::stream_info(server.url("/mount"));
     assert_eq!(details["name"], "Test Radio");
     assert_eq!(details["server"], "Qust test");
 }

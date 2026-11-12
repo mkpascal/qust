@@ -7,8 +7,8 @@ mod playlist;
 mod shortcuts;
 mod store;
 mod updater;
-mod visualizer;
 
+use qust_player::playlist::{player_height, PLAYER_WIDTH};
 use tauri::window::Color;
 use tauri::{AppHandle, Manager, RunEvent, State, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
@@ -94,15 +94,15 @@ fn main() {
             }
         })
         .setup(|app| {
-            let store = store::Store::load(app.handle())?;
-            let player = player::Player::start(store.clone(), player::TauriHost(app.handle().clone()), qust_audio::OutputKind::Device);
+            let store = store::Store::load()?;
+            let player = player::Player::start(store.clone(), player::TauriHost(app.handle().clone()), qust_player::OutputKind::Device);
             // Settings written by the Settings window take effect at once.
             let watcher = player.clone();
             store.watch(move |key, value| watcher.setting_changed(key, value.cloned()));
             app.manage(store);
             app.manage(player);
             let config = serde_json::json!({
-                "accent": accent(),
+                "accent": qust_player::accent(),
                 "debug": cfg!(debug_assertions),
             });
             app.manage(PageConfig { script: format!("window.__QUST__ = {config};") });
@@ -134,7 +134,7 @@ fn main() {
 }
 
 pub fn build_player(app: &AppHandle) -> tauri::Result<WebviewWindow> {
-    build_window(app, "main", "index.html", "Qust", (playlist::PLAYER_WIDTH, playlist::player_height(app)), None)
+    build_window(app, "main", "index.html", "Qust", (PLAYER_WIDTH, player_height(&app.state::<store::Store>())), None)
 }
 
 fn build_window(
@@ -235,24 +235,4 @@ fn set_theme(app: AppHandle, store: State<store::Store>, theme: String) {
             let _ = window.set_background_color(Some(background(theme)));
         }
     }
-}
-
-// The user's accent from the Windows palette: the base color, the lighter shade Windows uses in
-// dark mode (Light 2) and the darker one used in light mode (Dark 1).
-#[cfg(windows)]
-fn accent() -> Option<serde_json::Value> {
-    let key = windows_registry::CURRENT_USER
-        .open(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent")
-        .ok()?;
-    let palette = key.get_value("AccentPalette").ok()?;
-    let color = |index: usize| {
-        let rgb = palette.get(index * 4..index * 4 + 3)?;
-        Some(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]))
-    };
-    Some(serde_json::json!({ "base": color(3)?, "light": color(1)?, "dark": color(4)? }))
-}
-
-#[cfg(not(windows))]
-fn accent() -> Option<serde_json::Value> {
-    None
 }
