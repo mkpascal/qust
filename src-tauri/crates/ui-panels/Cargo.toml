@@ -6,4 +6,35 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 publish = false
 
+[features]
+# The capture and test harness (`qust_ui_panels::harness`): the panels rendered from reference
+# fixtures in hidden windows. Only the example and the tests enable it.
+capture = ["qust-ui/capture"]
+
 [dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.12" }
+qust-fluent = { path = "../fluent" }
+qust-ui = { path = "../ui" }
+# Only its plain data types and rules (menus, the shortcut recorder); never its OS calls: the app
+# hands those in through `PanelServices`.
+qust-shell = { path = "../shell" }
+serde_json = "1"
+smol = "2"
+
+[dev-dependencies]
+qust-ui = { path = "../ui", features = ["capture"] }
+qust-player = { path = "../player" }
+
+[[example]]
+name = "panels_capture"
+required-features = ["capture"]
+
+[[test]]
+name = "behaviour"
+harness = false
+required-features = ["capture"]
+
+[[test]]
+name = "end_to_end"
+harness = false
+required-features = ["capture"]

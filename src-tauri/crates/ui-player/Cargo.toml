@@ -6,4 +6,37 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 publish = false
 
+[features]
+# Stand-ins for the player and the outside world, and the fixture interpreter
+# (`qust_ui_player::testing`), for the capture example and the tests.
+capture = ["qust-ui/capture", "dep:futures"]
+
 [dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.12" }
+gpui-component = "=0.9.1"
+qust-fluent = { path = "../fluent" }
+qust-ui = { path = "../ui" }
+# Menu descriptions and accelerator labels only (no GPUI in it without its "gpui" feature).
+qust-shell = { path = "../shell" }
+serde_json = "1"
+futures = { version = "0.3", optional = true }
+
+[dev-dependencies]
+qust-ui = { path = "../ui", features = ["capture"] }
+qust-player = { path = "../player" }
+serde_json = "1"
+
+[[example]]
+# Not "capture": examples of every package land in target/debug/examples under their own name.
+name = "player_capture"
+required-features = ["capture"]
+
+[[test]]
+name = "behaviour"
+harness = false
+required-features = ["capture"]
+
+[[test]]
+name = "end_to_end"
+harness = false
+required-features = ["capture"]

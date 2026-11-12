@@ -6605,6 +6605,21 @@ name = "qust-spectrum"
 version = "0.1.0"
 
 [[package]]
+name = "qust-text"
+version = "0.1.0"
+dependencies = [
+ "gpui-component",
+ "gpui-pre",
+ "icu_properties",
+ "image",
+ "qust-fluent",
+ "qust-ui",
+ "serde_json",
+ "unicode-bidi",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "qust-ui"
 version = "0.1.0"
 dependencies = [
@@ -6625,14 +6640,42 @@ dependencies = [
 [[package]]
 name = "qust-ui-panels"
 version = "0.1.0"
+dependencies = [
+ "gpui-pre",
+ "qust-fluent",
+ "qust-player",
+ "qust-shell",
+ "qust-ui",
+ "serde_json",
+ "smol",
+]
 
 [[package]]
 name = "qust-ui-player"
 version = "0.1.0"
+dependencies = [
+ "futures",
+ "gpui-component",
+ "gpui-pre",
+ "qust-fluent",
+ "qust-player",
+ "qust-shell",
+ "qust-ui",
+ "serde_json",
+]
 
 [[package]]
 name = "qust-ui-playlist"
 version = "0.1.0"
+dependencies = [
+ "gpui-pre",
+ "image",
+ "qust-fluent",
+ "qust-player",
+ "qust-shell",
+ "qust-ui",
+ "serde_json",
+]
 
 [[package]]
 name = "qust-updater"
