@@ -9,11 +9,12 @@ use gpui::{App, Window};
 use qust_shell::menu::{Menu, Position};
 use qust_shell::recorder::Recorded;
 use qust_ui::fixture::Fixture;
-use qust_ui::{Background, Binding, Models, StreamInfo};
+use qust_ui::{Background, Binding, Models, Plugin, PluginStatus, StreamInfo};
 use serde_json::Value;
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 type KeySink = Rc<RefCell<Option<Box<dyn FnMut(Recorded)>>>>;
@@ -38,6 +39,10 @@ pub struct FakeServices {
     pub clipboard: RefCell<Vec<String>>,
     pub closed: Cell<u32>,
     paused: Cell<bool>,
+    /// What `installed_plugins` lists, and what "Browse…" picks.
+    pub installed: RefCell<Vec<PathBuf>>,
+    pub picked: RefCell<Vec<PathBuf>>,
+    next_plugin: Cell<u64>,
 }
 
 struct CaptureGuard(KeySink);
@@ -64,6 +69,9 @@ impl FakeServices {
             clipboard: RefCell::new(Vec::new()),
             closed: Cell::new(0),
             paused: Cell::new(false),
+            installed: RefCell::new(Vec::new()),
+            picked: RefCell::new(Vec::new()),
+            next_plugin: Cell::new(1),
         })
     }
 
@@ -124,6 +132,14 @@ impl FakeServices {
 
     pub fn paused(&self) -> bool {
         self.paused.get()
+    }
+
+    // The list as the host would report it after a change.
+    fn change_plugins(&self, change: impl FnOnce(&mut qust_ui::Plugins), cx: &mut App) {
+        let mut plugins = self.models.plugins.read(cx).plugins.clone();
+        plugins.notice = None;
+        change(&mut plugins);
+        self.models.apply_plugins(plugins, cx);
     }
 
     fn update_binding(&self, action: &str, change: impl FnOnce(&mut Binding), cx: &mut App) {
@@ -238,5 +254,76 @@ impl PanelServices for FakeServices {
     fn close_window(&self, _: &mut Window, _: &mut App) {
         self.record("close_window".into());
         self.closed.set(self.closed.get() + 1);
+    }
+
+    fn installed_plugins(&self) -> Vec<PathBuf> {
+        self.record("installed_plugins".into());
+        self.installed.borrow().clone()
+    }
+
+    fn browse_plugins(&self, _: &Window, cx: &mut App) {
+        self.record("browse_plugins".into());
+        let picked = self.picked.borrow().clone();
+        if !picked.is_empty() {
+            self.add_plugins(picked, cx);
+        }
+    }
+
+    fn add_plugins(&self, paths: Vec<PathBuf>, cx: &mut App) {
+        self.record(format!("add_plugins {}", paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(";")));
+        let first = self.next_plugin.get();
+        self.next_plugin.set(first + paths.len() as u64);
+        self.change_plugins(
+            |plugins| {
+                for (offset, path) in paths.iter().enumerate() {
+                    let name = path.file_stem().map(|stem| stem.to_string_lossy().to_string()).unwrap_or_default();
+                    plugins.plugins.push(Plugin { id: first + offset as u64, name, vendor: "Vendor".into(), path: path.display().to_string(), enabled: true, status: PluginStatus::Ready, editor_open: false });
+                }
+            },
+            cx,
+        );
+    }
+
+    fn remove_plugin(&self, id: u64, cx: &mut App) {
+        self.record(format!("remove_plugin {id}"));
+        self.change_plugins(|plugins| plugins.plugins.retain(|plugin| plugin.id != id), cx);
+    }
+
+    fn move_plugin(&self, id: u64, index: usize, cx: &mut App) {
+        self.record(format!("move_plugin {id} {index}"));
+        self.change_plugins(
+            |plugins| {
+                if let Some(from) = plugins.plugins.iter().position(|plugin| plugin.id == id) {
+                    let plugin = plugins.plugins.remove(from);
+                    let to = index.min(plugins.plugins.len());
+                    plugins.plugins.insert(to, plugin);
+                }
+            },
+            cx,
+        );
+    }
+
+    fn set_plugin_enabled(&self, id: u64, enabled: bool, cx: &mut App) {
+        self.record(format!("set_plugin_enabled {id} {enabled}"));
+        self.change_plugins(
+            |plugins| {
+                if let Some(plugin) = plugins.plugins.iter_mut().find(|plugin| plugin.id == id) {
+                    plugin.enabled = enabled;
+                }
+            },
+            cx,
+        );
+    }
+
+    fn open_plugin(&self, id: u64, _: &Window, cx: &mut App) {
+        self.record(format!("open_plugin {id}"));
+        self.change_plugins(
+            |plugins| {
+                if let Some(plugin) = plugins.plugins.iter_mut().find(|plugin| plugin.id == id) {
+                    plugin.editor_open = true;
+                }
+            },
+            cx,
+        );
     }
 }

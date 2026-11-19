@@ -16,6 +16,7 @@ use qust_ui::{Background, Bridge, WindowRoot};
 use qust_ui_panels::{info, info_window, settings, settings_window, InfoRequest, MenuDone, PanelServices};
 use serde_json::{json, Value};
 use std::any::Any;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -167,8 +168,9 @@ impl PanelServices for AppServices {
         bridge.player.write_setting("theme", Some(json!(theme)));
         bridge.models.apply_setting("theme", &json!(theme), cx);
         qust_ui::theme::apply(qust_ui::theme::ThemeChoice::parse(theme), cx);
-        // The menus and every window's title bar.
+        // The menus and every window's title bar (the plugins' windows too).
         let theme = Theme::from_setting(Some(theme));
+        qust(cx).plugins.set_dark(theme.is_dark());
         app::outside(cx, move || shell_theme::set_app_theme(theme));
     }
 
@@ -238,5 +240,48 @@ impl PanelServices for AppServices {
 
     fn close_window(&self, window: &mut Window, _cx: &mut App) {
         window.remove_window();
+    }
+
+    fn installed_plugins(&self) -> Vec<PathBuf> {
+        qust_vst::installed()
+    }
+
+    fn browse_plugins(&self, window: &Window, cx: &mut App) {
+        let inner = qust(cx);
+        let plugins = inner.plugins.clone();
+        #[cfg(windows)]
+        {
+            // Blocks until closed, on a thread of its own: the windows keep running.
+            let owner = gpui_glue::hwnd(window);
+            let folder = qust_vst::bundle::standard_folders().into_iter().next();
+            std::thread::spawn(move || {
+                let paths = qust_shell::picker::pick_plugins(owner, folder);
+                if !paths.is_empty() {
+                    plugins.add(paths);
+                }
+            });
+        }
+        #[cfg(not(windows))]
+        let _ = (window, plugins);
+    }
+
+    fn add_plugins(&self, paths: Vec<PathBuf>, cx: &mut App) {
+        qust(cx).plugins.add(paths);
+    }
+
+    fn remove_plugin(&self, id: u64, cx: &mut App) {
+        qust(cx).plugins.remove(id);
+    }
+
+    fn move_plugin(&self, id: u64, index: usize, cx: &mut App) {
+        qust(cx).plugins.move_to(id, index);
+    }
+
+    fn set_plugin_enabled(&self, id: u64, enabled: bool, cx: &mut App) {
+        qust(cx).plugins.set_enabled(id, enabled);
+    }
+
+    fn open_plugin(&self, id: u64, window: &Window, cx: &mut App) {
+        qust(cx).plugins.open_editor(id, gpui_glue::hwnd(window));
     }
 }

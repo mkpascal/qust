@@ -62,6 +62,11 @@ impl Store {
         Store { inner: Arc::new(Inner { path, data: Mutex::new(data), watcher: Mutex::new(None) }) }
     }
 
+    // The settings file (what is kept next to it belongs to the same settings).
+    pub fn path(&self) -> &Path {
+        &self.inner.path
+    }
+
     pub fn get(&self, key: &str) -> Option<Value> {
         self.inner.data.lock().unwrap().get(key).cloned()
     }

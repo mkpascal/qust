@@ -6,6 +6,7 @@
 //! turns what the mixer and the decoders report into events, so the handler may call back in.
 
 mod decode;
+mod effects;
 mod info;
 mod mixer;
 mod output;
@@ -13,6 +14,7 @@ mod ring;
 mod source;
 mod stream;
 
+pub use effects::{Effect, EffectSlot};
 pub use info::{icecast_title, info};
 pub use mixer::Tap;
 
@@ -41,6 +43,8 @@ pub struct Config {
     pub codecs: &'static CodecRegistry,
     pub output: OutputKind,
     pub user_agent: String,
+    /// Processing run on the mix (the plugins), shared across engines; None: none.
+    pub effects: Option<Arc<EffectSlot>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -110,6 +114,7 @@ pub(crate) struct Inner {
     mix: Arc<MixShared>,
     // the output thread, woken whenever the streams change
     output: OnceLock<thread::Thread>,
+    effects: Option<Arc<EffectSlot>>,
 }
 
 // Stream ids, unique across engines: info() is shared, and a stream's details belong to the
@@ -124,6 +129,9 @@ impl Drop for Inner {
         }
         if let Some(output) = self.output.get() {
             output.unpark();
+        }
+        if let Some(effects) = &self.effects {
+            effects.engine(None);
         }
     }
 }
@@ -163,7 +171,7 @@ impl Engine {
             OutputKind::Device => output::device_rate().unwrap_or(DEFAULT_RATE),
             OutputKind::Null => DEFAULT_RATE,
         };
-        let mix = Arc::new(MixShared::new(rate));
+        let mix = Arc::new(MixShared::with_effects(rate, config.effects.clone()));
         let inner = Arc::new(Inner {
             codecs: config.codecs,
             user_agent: config.user_agent,
@@ -172,7 +180,11 @@ impl Engine {
             closing: Mutex::new(Vec::new()),
             mix: mix.clone(),
             output: OnceLock::new(),
+            effects: config.effects.clone(),
         });
+        if let Some(effects) = &config.effects {
+            effects.engine(Some(rate));
+        }
         let weak = Arc::downgrade(&inner);
         // No device stream is opened here: only once something is loaded.
         let output = match config.output {

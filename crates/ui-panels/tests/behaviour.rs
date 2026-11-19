@@ -12,10 +12,10 @@ use qust_shell::menu::{copy_menu, Item, Menu, Position};
 use qust_shell::recorder::Recorded;
 use qust_ui::capture::Job;
 use qust_ui::fixture::{self, Fixture};
-use qust_ui::{Playback, Status, UpdateStatus};
+use qust_ui::{Playback, Plugin, PluginStatus, Plugins, Status, UpdateStatus};
 use qust_ui_panels::harness::{self, Opened, Panel};
 use qust_ui_panels::info::{InfoView, VALUES};
-use qust_ui_panels::settings::{SettingsView, RECORDING_HINT};
+use qust_ui_panels::settings::{plugins_summary, Page, SettingsView, BROWSE_ID, MOVE_DOWN, MOVE_UP, PLUGINS_UNAVAILABLE, RECORDING_HINT, REMOVE};
 use qust_ui_panels::ComboKind;
 use qust_fluent::ShortcutDisplay;
 use serde_json::json;
@@ -335,7 +335,8 @@ async fn settings_tests(c: &Shared, cx: &mut AsyncApp) {
     }
 
     // --- Updates (3.5) ---
-    let button = point(455.0, 725.0);
+    // On the reference page at (455, 725); the plugins card above it moved it down.
+    let button = point(455.0, 725.0 + qust_ui_panels::settings::PLUGINS_CARD_SHIFT);
     let base = UpdateStatus { installed: true, current: "1.1.5".into(), status: "idle".into(), last_check: Some(1_794_392_500), auto: true, ..Default::default() };
     // (status, text, label, busy, accent, what a click asks for)
     #[allow(clippy::type_complexity)]
@@ -529,12 +530,132 @@ async fn info_tests(c: &Shared, cx: &mut AsyncApp) {
     cx.update(|cx| opened.session.close(cx));
 }
 
+// The Audio processing plugins card and page.
+fn plugin(id: u64, name: &str, vendor: &str, enabled: bool, status: PluginStatus) -> Plugin {
+    Plugin { id, name: name.into(), vendor: vendor.into(), path: format!(r"C:\VST3\{name}.vst3"), enabled, status, editor_open: false }
+}
+
+fn focused(opened: &Opened, view: &gpui::Entity<SettingsView>, cx: &mut AsyncApp) -> Option<&'static str> {
+    cx.update(|cx| cx.update_window(opened.session.any(), |_, window, cx| view.read(cx).focused(window)).ok().flatten())
+}
+
+// The menu shown last, with each item's enabled flag.
+fn menu_states(opened: &Opened) -> Vec<(u32, String, bool, bool)> {
+    let menus = opened.fake.menus.borrow();
+    let Some((menu, _)) = menus.last() else { return Vec::new() };
+    menu.items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Action { id, text, enabled, checked, .. } => Some((*id, text.clone(), *enabled, *checked)),
+            Item::Separator => None,
+        })
+        .collect()
+}
+
+async fn plugins_tests(c: &Shared, cx: &mut AsyncApp) {
+    let (job, opened) = open("settings-default", cx).await;
+    let view = settings(&opened);
+    let models = opened.session.models.clone();
+    // The card: after the Background helper, where the reference page's next group began.
+    let helper = at(&job, "body>.settings-list>.setting[4]");
+    let card = point(helper.x, helper.y + 35.0 + 3.0 + 28.0);
+
+    let list = Plugins { available: true, plugins: vec![plugin(1, "EQ", "Acme", true, PluginStatus::Ready), plugin(2, "Gate", "", false, PluginStatus::Failed("boom".into()))], notice: None };
+    cx.update(|cx| models.apply_plugins(list.clone(), cx));
+    settle(&opened, cx).await;
+    check(c, "plugins card: names the plugins that are on", plugins_summary(&list) == "EQ", plugins_summary(&list));
+
+    click(&opened, card, cx).await;
+    let page = cx.update(|cx| view.read(cx).page());
+    check(c, "plugins card: a click opens the page, the focus on Back", page == Page::Plugins && focused(&opened, &view, cx) == Some("back"), (page, focused(&opened, &view, cx)));
+    key(&opened, "backspace", cx).await;
+    let page = cx.update(|cx| view.read(cx).page());
+    check(c, "Backspace goes back, the focus on the card", page == Page::Main && focused(&opened, &view, cx) == Some("plugins"), (page, focused(&opened, &view, cx)));
+    click(&opened, card, cx).await;
+    click(&opened, point(36.0, 32.0), cx).await;
+    let page = cx.update(|cx| view.read(cx).page());
+    check(c, "Back returns to Settings", page == Page::Main, page);
+    click(&opened, card, cx).await;
+    key(&opened, "alt-left", cx).await;
+    let page = cx.update(|cx| view.read(cx).page());
+    check(c, "Alt+Left goes back too", page == Page::Main, page);
+    click(&opened, card, cx).await;
+
+    // Add plugin: the installed ones (checked when already added), then Browse….
+    *opened.fake.installed.borrow_mut() = vec![r"C:\VST3\EQ.vst3".into(), r"C:\VST3\Tom & Jerry.vst3".into()];
+    let from = mark(&opened);
+    let _ = cx.update(|cx| cx.update_window(opened.session.any(), |_, window, cx| view.update(cx, |view, cx| view.add_clicked(None, window, cx))));
+    settle(&opened, cx).await;
+    let menu = menu_states(&opened);
+    check(
+        c,
+        "add: a menu of the installed plugins, then Browse…",
+        menu == vec![(1, "EQ".into(), true, true), (2, "Tom && Jerry".into(), true, false), (BROWSE_ID, "Browse\u{2026}".into(), true, false)],
+        &menu,
+    );
+    cx.update(|cx| opened.fake.answer_menu(Some(2), cx));
+    settle(&opened, cx).await;
+    check(c, "add: choosing one adds it", calls_since(&opened, from) == ["installed_plugins", "popup_menu Cursor", r"add_plugins C:\VST3\Tom & Jerry.vst3"], calls_since(&opened, from));
+    let _ = cx.update(|cx| cx.update_window(opened.session.any(), |_, window, cx| view.update(cx, |view, cx| view.add_clicked(None, window, cx))));
+    settle(&opened, cx).await;
+    let from = mark(&opened);
+    cx.update(|cx| opened.fake.answer_menu(Some(BROWSE_ID), cx));
+    settle(&opened, cx).await;
+    check(c, "add: Browse… opens the picker", calls_since(&opened, from) == ["browse_plugins"], calls_since(&opened, from));
+    opened.fake.installed.borrow_mut().clear();
+    let from = mark(&opened);
+    let _ = cx.update(|cx| cx.update_window(opened.session.any(), |_, window, cx| view.update(cx, |view, cx| view.add_clicked(None, window, cx))));
+    settle(&opened, cx).await;
+    check(c, "add: with nothing installed, the picker straight away", calls_since(&opened, from) == ["installed_plugins", "browse_plugins"], calls_since(&opened, from));
+
+    // A row's menu, and what its items do.
+    cx.update(|cx| models.apply_plugins(list.clone(), cx));
+    settle(&opened, cx).await;
+    let first = cx.update(|cx| view.read(cx).plugin_menu(1, cx));
+    let last = cx.update(|cx| view.read(cx).plugin_menu(2, cx));
+    let enabled = |menu: &Menu| menu.items.iter().filter_map(|item| if let Item::Action { enabled, .. } = item { Some(*enabled) } else { None }).collect::<Vec<_>>();
+    check(c, "row menu: Move up, Move down, Remove; the ends can't move further", enabled(&first) == [false, true, true] && enabled(&last) == [true, false, true], (enabled(&first), enabled(&last)));
+    let from = mark(&opened);
+    cx.update(|cx| view.update(cx, |view, cx| view.plugin_action(1, MOVE_DOWN, cx)));
+    settle(&opened, cx).await;
+    let order: Vec<u64> = cx.update(|cx| models.plugins.read(cx).plugins.plugins.iter().map(|p| p.id).collect());
+    check(c, "Move down moves it one place", calls_since(&opened, from) == ["move_plugin 1 1"] && order == [2, 1], (calls_since(&opened, from), order));
+    let from = mark(&opened);
+    cx.update(|cx| view.update(cx, |view, cx| view.plugin_action(1, MOVE_UP, cx)));
+    cx.update(|cx| view.update(cx, |view, cx| view.plugin_action(1, MOVE_UP, cx)));
+    settle(&opened, cx).await;
+    check(c, "Move up moves it back, and no further", calls_since(&opened, from) == ["move_plugin 1 0"], calls_since(&opened, from));
+    let from = mark(&opened);
+    cx.update(|cx| view.update(cx, |view, cx| view.plugin_action(2, REMOVE, cx)));
+    settle(&opened, cx).await;
+    let left: Vec<u64> = cx.update(|cx| models.plugins.read(cx).plugins.plugins.iter().map(|p| p.id).collect());
+    check(c, "Remove removes it", calls_since(&opened, from) == ["remove_plugin 2"] && left == [1], (calls_since(&opened, from), left));
+
+    // Esc still closes the window from the page.
+    let from = mark(&opened);
+    key(&opened, "escape", cx).await;
+    check(c, "Esc closes Settings from the plugins page", calls_since(&opened, from) == ["close_window"], calls_since(&opened, from));
+    cx.update(|cx| opened.session.close(cx));
+
+    // Where plugins can't run: the card says so and opens nothing.
+    let (_, unavailable) = open("settings-default", cx).await;
+    let view = settings(&unavailable);
+    let list = Plugins { available: false, plugins: Vec::new(), notice: None };
+    cx.update(|cx| unavailable.session.models.apply_plugins(list.clone(), cx));
+    settle(&unavailable, cx).await;
+    click(&unavailable, card, cx).await;
+    let page = cx.update(|cx| view.read(cx).page());
+    check(c, "plugins unavailable: the card says so and stays shut", page == Page::Main && plugins_summary(&list) == PLUGINS_UNAVAILABLE, page);
+    cx.update(|cx| unavailable.session.close(cx));
+}
+
 fn main() {
     let checks: Shared = Rc::new(RefCell::new(Checks::default()));
     let shared = checks.clone();
     qust_ui::capture::run(move |cx| {
         cx.spawn(async move |cx| {
             settings_tests(&shared, cx).await;
+            plugins_tests(&shared, cx).await;
             info_tests(&shared, cx).await;
             info_texts(&shared, cx).await;
             cx.update(|cx| cx.quit());

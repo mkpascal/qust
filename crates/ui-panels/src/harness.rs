@@ -70,12 +70,26 @@ fn element_name(selector: &str) -> Option<&'static str> {
 }
 
 /// The centre of an element in the job's layout file (CSS px), per theme when they differ.
+///
+/// Settings has a card the reference page didn't (Audio processing plugins, after the
+/// Background helper): what comes after it is [`crate::settings::PLUGINS_CARD_SHIFT`] lower.
 pub fn center(job: &Job, name: &str) -> Option<Point<f32>> {
     let layout = layout(&job.fixture.window, &job.variant).or_else(|| layout(&job.fixture.window, &job.fixture.name))?;
-    let element = layout["elements"].as_array()?.iter().find(|e| e["name"] == name)?;
+    let elements = layout["elements"].as_array()?;
+    let top_and_height = |name: &str| -> Option<(f32, f32)> {
+        let element = elements.iter().find(|e| e["name"] == name)?;
+        let values = element["box"].as_array().or_else(|| element["box"][job.theme.as_str()].as_array())?;
+        Some((values.get(1)?.as_f64()? as f32, values.get(3)?.as_f64()? as f32))
+    };
+    let element = elements.iter().find(|e| e["name"] == name)?;
     let values = element["box"].as_array().or_else(|| element["box"][job.theme.as_str()].as_array())?;
     let n = |i: usize| values.get(i).and_then(Value::as_f64).map(|v| v as f32);
-    Some(point(n(0)? + n(2)? / 2.0, n(1)? + n(3)? / 2.0))
+    let (x, y) = (n(0)? + n(2)? / 2.0, n(1)? + n(3)? / 2.0);
+    let shift = match top_and_height("body>.settings-list>.setting[4]") {
+        Some((top, height)) if job.fixture.window == "settings" && n(1)? >= top + height => crate::settings::PLUGINS_CARD_SHIFT,
+        _ => 0.0,
+    };
+    Some(point(x, y + shift))
 }
 
 pub async fn settle(opened: &Opened, cx: &mut AsyncApp) {

@@ -1,0 +1,29 @@
+[package]
+name = "qust-vst"
+version = "0.1.0"
+description = "Qust's audio processing plugins: a VST3 host for 64-bit effects, run on the mix"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[dependencies]
+qust-audio = { path = "../audio" }
+qust-player = { path = "../player" }
+serde_json = "1"
+
+[target."cfg(windows)".dependencies]
+# Bindings generated from the VST 3 SDK headers (MIT OR Apache-2.0), and COM helpers.
+vst3 = "0.3.0"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+symphonia = "0.6.1"

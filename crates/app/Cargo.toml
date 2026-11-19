@@ -30,6 +30,7 @@ qust-ui-panels = { path = "../ui-panels" }
 qust-shell = { path = "../shell", features = ["gpui"] }
 qust-player = { path = "../player" }
 qust-updater = { path = "../updater" }
+qust-vst = { path = "../vst" }
 # The vendored GPUI patch (see the workspace manifest) lays right-to-left runs out natively.
 qust-text = { path = "../text", features = ["native-bidi"] }
 serde = "1"

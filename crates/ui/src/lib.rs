@@ -49,7 +49,7 @@ pub mod theme;
 pub mod window;
 
 pub use bridge::{Bridge, Event, Player, Reply};
-pub use model::{format, Background, Binding, Cartridge, Entry, Playback, PlayerState, Playlist, Preload, SettingChange, Shortcuts, Status, StreamInfo, UpdateStatus};
+pub use model::{format, Background, Binding, Cartridge, Entry, Playback, PlayerState, Playlist, Plugin, PluginStatus, Plugins, Preload, SettingChange, Shortcuts, Status, StreamInfo, UpdateStatus};
 pub use models::Models;
 pub use window::{analyzer_slot, portal_slot, AnalyzerView, WindowRoot};
 

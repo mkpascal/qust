@@ -12,22 +12,29 @@
 //!   `models.background` / `models.update`, and a failed helper change shows its error until the
 //!   next change, as the page did.
 //! - Esc closes the window, unless a shortcut is being recorded (then it cancels the recording).
+//! - "Audio processing plugins" opens a page of its own (Back, Backspace or Alt+Left return):
+//!   the VST3 plugins from `models.plugins`, in processing order, each with Edit (its own
+//!   window), On/Off and a "More options" menu (Move up, Move down, Remove), and Add plugin (a
+//!   menu of the installed plugins, then Browse…). Every change goes through the services.
 
 use crate::services::PanelServices;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    div, px, AnyElement, App, AppContext, Bounds, Context, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, Modifiers, ParentElement, Pixels,
+    div, px, AnyElement, App, AppContext, Bounds, Context, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, Modifiers, ParentElement, Pixels, StatefulInteractiveElement,
     Render, ScrollHandle, Styled, Subscription, Window,
 };
-use qust_fluent::focus::{tab_stop, FocusNext, FocusPrev};
+use qust_fluent::focus::{is_focus_visible, tab_stop, FocusNext, FocusPrev};
+use qust_fluent::paint::bounds_probe;
 use qust_fluent::scrollbar::scroll_area;
 use qust_fluent::section::{setting_card, setting_icon, setting_text, settings_group};
-use qust_fluent::{shortcut_keys, theme, Button, ButtonKind, Combo, Forced, Icon, ShortcutBox, ShortcutDisplay, Switch, TextStyles, Theme};
+use qust_fluent::{focus_ring, icon, line, shortcut_keys, theme, Button, ButtonKind, Combo, Forced, Icon, ShortcutBox, ShortcutDisplay, Switch, TextStyles, Theme};
 use qust_shell::menu::{Menu, Position};
 use qust_shell::recorder::{record_gpui, Recorded};
-use qust_ui::{format, Background, Binding, Models, UpdateStatus, WindowRoot};
+use qust_ui::{format, Background, Binding, Models, Plugin, PluginStatus, UpdateStatus, WindowRoot};
 use serde_json::json;
 use std::any::Any;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 /// The client size the app opens the window at (main.rs: 520 × 850). The content is taller
@@ -53,6 +60,74 @@ pub const RECORDING_HINT: &str = "Esc to cancel, Backspace to reset";
 pub const UNAVAILABLE_HINT: &str = "Another app is using this shortcut. Pick a different one.";
 pub const BACKGROUND_HINT: &str = "Starts with Windows in the tray, so shortcuts work while Qust is closed";
 pub const BACKGROUND_UNAVAILABLE: &str = "Works in the installed version of Qust.";
+
+pub const PLUGINS_TITLE: &str = "Audio processing plugins";
+pub const PLUGINS_HINT: &str = "VST3 effects that shape the sound, like an equalizer";
+/// How much lower everything after the Audio processing plugins card is than on the reference
+/// page, which didn't have it: the card (56, its hint on one line) and its 3 px margin.
+pub const PLUGINS_CARD_SHIFT: f32 = 59.0;
+pub const PLUGINS_ALL_OFF: &str = "All turned off";
+pub const PLUGINS_UNAVAILABLE: &str = "Works in Qust for Windows.";
+/// What audio processing is, at the top of the page.
+pub const PLUGINS_INTRO: &str = "Effects that change how everything sounds, like an equalizer or a compressor. Qust accepts 64-bit VST3 plugins and runs them from top to bottom.";
+pub const ADD_PLUGIN_TITLE: &str = "Add a plugin";
+pub const ADD_PLUGIN_HINT: &str = "A 64-bit VST3 effect (.vst3) from your drive";
+pub const ORDER_HEADING: &str = "Processing order";
+pub const NO_PLUGINS_TITLE: &str = "No plugins yet";
+pub const NO_PLUGINS_HINT: &str = "Everything plays as it is.";
+pub const PLUGIN_STARTING: &str = "Starting\u{2026}";
+pub const BROWSE: &str = "Browse\u{2026}";
+/// The ids of a plugin row's menu items.
+pub const MOVE_UP: u32 = 1;
+pub const MOVE_DOWN: u32 = 2;
+pub const REMOVE: u32 = 3;
+/// The Add menu: the installed plugins are 1…, Browse… is this.
+pub const BROWSE_ID: u32 = 10_000;
+
+/// Which page Settings shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Page {
+    Main,
+    Plugins,
+}
+
+/// What a plugin's row says under its name: its vendor, "Starting…", or why it doesn't run
+/// (in red).
+pub fn plugin_row_text(plugin: &Plugin) -> (String, bool) {
+    match &plugin.status {
+        PluginStatus::Failed(error) => (qust_text::shown(error), true),
+        PluginStatus::Loading => (PLUGIN_STARTING.to_string(), false),
+        _ if plugin.vendor.is_empty() => ("VST3 plugin".to_string(), false),
+        _ => (qust_text::shown(&plugin.vendor), false),
+    }
+}
+
+/// What the Audio processing plugins card says: the hint, the plugins that are on, or that
+/// they are all off.
+pub fn plugins_summary(plugins: &qust_ui::Plugins) -> String {
+    if !plugins.available {
+        return PLUGINS_UNAVAILABLE.into();
+    }
+    if plugins.plugins.is_empty() {
+        return PLUGINS_HINT.into();
+    }
+    let on: Vec<String> = plugins.plugins.iter().filter(|plugin| plugin.enabled).map(|plugin| qust_text::shown(&plugin.name)).collect();
+    if on.is_empty() {
+        PLUGINS_ALL_OFF.into()
+    } else {
+        on.join(", ")
+    }
+}
+
+/// A menu item's text: a lone `&` would underline the next letter.
+fn menu_text(text: &str) -> String {
+    text.replace('&', "&&")
+}
+
+/// Where a button's menu opens: under it, at its left (+ 2 px), as the combos' do.
+fn below(bounds: Option<Bounds<Pixels>>) -> Position {
+    bounds.map_or(Position::Cursor, |bounds| Position::Client { x: f64::from(bounds.left().as_f32()), y: f64::from(bounds.bottom().as_f32()) + 2.0 })
+}
 
 /// The three combos.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -154,6 +229,16 @@ struct Focus {
     shortcuts: [FocusHandle; 3],
     update: FocusHandle,
     auto: FocusHandle,
+    plugins: FocusHandle,
+    back: FocusHandle,
+    add: FocusHandle,
+}
+
+// A plugin row's tab stops: Edit, the toggle, More options.
+struct RowFocus {
+    edit: FocusHandle,
+    toggle: FocusHandle,
+    more: FocusHandle,
 }
 
 pub struct SettingsView {
@@ -175,6 +260,8 @@ pub struct SettingsView {
     auto: Option<bool>,
     forced: Vec<(String, Forced)>,
     focus: Focus,
+    rows: HashMap<u64, RowFocus>,
+    page: Page,
     scroll: ScrollHandle,
     overflow: bool,
     _subscriptions: Vec<Subscription>,
@@ -197,6 +284,11 @@ impl SettingsView {
                 }
             }),
             cx.observe(&models.shortcuts, |_, _, cx| cx.notify()),
+            cx.observe(&models.plugins, |view: &mut SettingsView, plugins, cx| {
+                let ids: Vec<u64> = plugins.read(cx).plugins.plugins.iter().map(|plugin| plugin.id).collect();
+                view.rows.retain(|id, _| ids.contains(id));
+                cx.notify();
+            }),
             cx.observe(&models.update, |view: &mut SettingsView, _, cx| {
                 view.auto = None;
                 cx.notify();
@@ -231,6 +323,9 @@ impl SettingsView {
             shortcuts: [tab_stop(cx), tab_stop(cx), tab_stop(cx)],
             update: tab_stop(cx),
             auto: tab_stop(cx),
+            plugins: tab_stop(cx),
+            back: tab_stop(cx),
+            add: tab_stop(cx),
         };
         // Keys reach the view only along the focus path: the window starts with the view focused.
         focus.root.focus(window, cx);
@@ -250,6 +345,8 @@ impl SettingsView {
             auto: None,
             forced: Vec::new(),
             focus,
+            rows: HashMap::new(),
+            page: Page::Main,
             scroll: ScrollHandle::new(),
             // 931 px of content in 850: it starts with the scrollbar (corrected after layout).
             overflow: true,
@@ -304,7 +401,7 @@ impl SettingsView {
     }
 
     /// Which control has the focus: "theme", "colors", "autoplay", "reconnect", "background",
-    /// "play", "stop", "toggle", "update", "auto", "root" (tests).
+    /// "play", "stop", "toggle", "update", "auto", "plugins", "back", "add", "root" (tests).
     pub fn focused(&self, window: &Window) -> Option<&'static str> {
         let f = &self.focus;
         [
@@ -318,6 +415,9 @@ impl SettingsView {
             (&f.shortcuts[2], "toggle"),
             (&f.update, "update"),
             (&f.auto, "auto"),
+            (&f.plugins, "plugins"),
+            (&f.back, "back"),
+            (&f.add, "add"),
             (&f.root, "root"),
         ]
         .into_iter()
@@ -513,7 +613,290 @@ impl SettingsView {
             cx.stop_propagation();
         } else if event.keystroke.key == "escape" {
             self.services.close_window(window, cx);
+        } else if self.page == Page::Plugins && (event.keystroke.key == "backspace" || (event.keystroke.key == "left" && event.keystroke.modifiers.alt)) {
+            self.show_page(Page::Main, window, cx);
+            cx.stop_propagation();
         }
+    }
+
+    /// The page shown.
+    pub fn page(&self) -> Page {
+        self.page
+    }
+
+    /// Shows a page from its top, the focus on its first control (on the card, coming back).
+    pub fn show_page(&mut self, page: Page, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page == page {
+            return;
+        }
+        let from = self.page;
+        self.page = page;
+        self.scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+        match (from, page) {
+            (Page::Main, Page::Plugins) => self.focus.back.focus(window, cx),
+            (Page::Plugins, Page::Main) => self.focus.plugins.focus(window, cx),
+            _ => {}
+        }
+        cx.notify();
+    }
+
+    fn row_focus(&mut self, id: u64, cx: &mut Context<Self>) -> &RowFocus {
+        self.rows.entry(id).or_insert_with(|| RowFocus { edit: tab_stop(cx), toggle: tab_stop(cx), more: tab_stop(cx) })
+    }
+
+    /// The Add menu: the installed plugins (checked when already in the list), then Browse….
+    pub fn add_menu(&self, installed: &[PathBuf], cx: &App) -> Menu {
+        let added: Vec<String> = self.models.plugins.read(cx).plugins.plugins.iter().map(|plugin| plugin.path.to_lowercase()).collect();
+        let mut menu = Menu::new();
+        for (index, path) in installed.iter().enumerate() {
+            let name = path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+            let cut = name.len().saturating_sub(5);
+            let name = if name.is_char_boundary(cut) && name[cut..].eq_ignore_ascii_case(".vst3") { name[..cut].to_string() } else { name };
+            let checked = added.contains(&path.to_string_lossy().to_lowercase());
+            menu = menu.action(index as u32 + 1, &menu_text(&name), true, checked, None);
+        }
+        if !installed.is_empty() {
+            menu = menu.separator();
+        }
+        menu.action(BROWSE_ID, BROWSE, true, false, None)
+    }
+
+    /// Add plugin was clicked (`bounds`: the button's): the installed plugins to pick from, or
+    /// the file picker straight away when none are installed.
+    pub fn add_clicked(&mut self, bounds: Option<Bounds<Pixels>>, window: &mut Window, cx: &mut Context<Self>) {
+        let installed = self.services.installed_plugins();
+        if installed.is_empty() {
+            self.services.browse_plugins(window, cx);
+            return;
+        }
+        let position = below(bounds);
+        let this = cx.entity().downgrade();
+        let menu = self.add_menu(&installed, cx);
+        let owner = window.window_handle();
+        self.services.popup_menu(
+            window,
+            menu,
+            position,
+            Box::new(move |chosen, cx| {
+                let Some(id) = chosen.filter(|id| *id > 0) else { return };
+                if id == BROWSE_ID {
+                    let _ = owner.update(cx, |_, window, cx| {
+                        let _ = this.update(cx, |view, cx| view.services.browse_plugins(window, cx));
+                    });
+                } else if let Some(path) = installed.get(id as usize - 1) {
+                    let _ = this.update(cx, |view, cx| view.services.add_plugins(vec![path.clone()], cx));
+                }
+            }),
+            cx,
+        );
+    }
+
+    /// A row's More options menu: Move up, Move down, Remove.
+    pub fn plugin_menu(&self, id: u64, cx: &App) -> Menu {
+        let plugins = &self.models.plugins.read(cx).plugins.plugins;
+        let index = plugins.iter().position(|plugin| plugin.id == id).unwrap_or(0);
+        Menu::new()
+            .action(MOVE_UP, "Move up", index > 0, false, None)
+            .action(MOVE_DOWN, "Move down", index + 1 < plugins.len(), false, None)
+            .separator()
+            .action(REMOVE, "Remove", true, false, None)
+    }
+
+    pub fn more_clicked(&mut self, id: u64, bounds: Option<Bounds<Pixels>>, window: &mut Window, cx: &mut Context<Self>) {
+        let this = cx.entity().downgrade();
+        let menu = self.plugin_menu(id, cx);
+        self.services.popup_menu(
+            window,
+            menu,
+            below(bounds),
+            Box::new(move |chosen, cx| {
+                if let Some(chosen) = chosen {
+                    let _ = this.update(cx, |view, cx| view.plugin_action(id, chosen, cx));
+                }
+            }),
+            cx,
+        );
+    }
+
+    /// An item of a row's menu was chosen.
+    pub fn plugin_action(&mut self, id: u64, action: u32, cx: &mut Context<Self>) {
+        let plugins = &self.models.plugins.read(cx).plugins.plugins;
+        let Some(index) = plugins.iter().position(|plugin| plugin.id == id) else { return };
+        let count = plugins.len();
+        match action {
+            MOVE_UP if index > 0 => self.services.move_plugin(id, index - 1, cx),
+            MOVE_DOWN if index + 1 < count => self.services.move_plugin(id, index + 1, cx),
+            REMOVE => {
+                self.rows.remove(&id);
+                self.services.remove_plugin(id, cx);
+            }
+            _ => {}
+        }
+    }
+
+    /// The card that opens the plugins page.
+    fn plugins_card(&self, window: &Window, cx: &Context<Self>) -> AnyElement {
+        let theme = *theme(cx);
+        let plugins = &self.models.plugins.read(cx).plugins;
+        let available = plugins.available;
+        let ring = available && is_focus_visible(&self.focus.plugins, window, cx);
+        let this = cx.entity().downgrade();
+        let mut card = setting_card(&theme)
+            .id("pluginsCard")
+            .group("plugins-card")
+            .when(available, |card| {
+                card.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .rounded(px(6.0))
+                        .group_hover("plugins-card", |s| s.bg(theme.subtle_hover))
+                        .id("pluginsCardFill")
+                        .group_active("plugins-card", |s| s.bg(theme.subtle_pressed)),
+                )
+            })
+            .child(setting_icon(Icon::Plugin, !available, &theme).relative())
+            .child(setting_text(PLUGINS_TITLE, plugins_summary(plugins), false, !available, &theme).relative())
+            .child(icon(Icon::Forward, 16.0).relative().text_color(theme.text_2).when(!available, |i| i.opacity(0.45)))
+            .when(ring, |card| card.child(focus_ring(6.0, &theme)));
+        if available {
+            card = card.cursor_pointer().track_focus(&self.focus.plugins).on_click(move |_, window, cx| {
+                let _ = this.update(cx, |view, cx| view.show_page(Page::Plugins, window, cx));
+            });
+        }
+        card.into_any_element()
+    }
+
+    /// The plugins page.
+    fn plugins_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> gpui::Div {
+        let theme = *theme(cx);
+        let plugins = self.models.plugins.read(cx).plugins.clone();
+        let this = cx.entity().downgrade();
+        let back = {
+            let this = this.clone();
+            Button::new("pluginsBack")
+                .icon_only(Icon::Back)
+                .w(px(32.0))
+                .aria_label("Back")
+                .tooltip("Back")
+                .forced(self.forced(&["#pluginsBack"]))
+                .focus(&self.focus.back)
+                .on_click(move |_, window, cx| {
+                    let _ = this.update(cx, |view, cx| view.show_page(Page::Main, window, cx));
+                })
+        };
+        let mut page = div()
+            .flex()
+            .flex_col()
+            .pt(px(16.0))
+            .px(px(20.0))
+            .pb(px(20.0))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.0))
+                    .mb(px(10.0))
+                    .child(back)
+                    .child(div().font_text().semibold().type_size(20.0, 28.0).text_color(theme.text).child(line(PLUGINS_TITLE))),
+            )
+            .child(div().font_text().type_size(14.0, 20.0).text_color(theme.text_2).mb(px(16.0)).child(PLUGINS_INTRO));
+
+        // Add a plugin
+        let (bounds, probe) = bounds_probe("addPluginBounds", window, cx);
+        let add = {
+            let this = this.clone();
+            div().relative().child(probe).child(
+                Button::new("addPlugin")
+                    .icon(Icon::Plus)
+                    .label("Add plugin")
+                    .disabled(!plugins.available)
+                    .forced(self.forced(&["#addPlugin"]))
+                    .focus(&self.focus.add)
+                    .on_click(move |_, window, cx| {
+                        let bounds = *bounds.read(cx);
+                        let _ = this.update(cx, |view, cx| view.add_clicked(bounds, window, cx));
+                    }),
+            )
+        };
+        let (add_text, add_error) = match (&plugins.notice, plugins.available) {
+            (_, false) => (PLUGINS_UNAVAILABLE.to_string(), false),
+            (Some(notice), true) => (qust_text::shown(notice), true),
+            (None, true) => (ADD_PLUGIN_HINT.to_string(), false),
+        };
+        page = page.child(Self::card(Icon::Plus, ADD_PLUGIN_TITLE, add_text, add_error, !plugins.available, Some(add.into_any_element()), &theme, cx));
+
+        // The list, in processing order
+        page = page.child(group(ORDER_HEADING, false, &theme, cx));
+        if plugins.plugins.is_empty() {
+            page = page.child(Self::card(Icon::Plugin, NO_PLUGINS_TITLE, NO_PLUGINS_HINT, false, false, None, &theme, cx));
+        }
+        for plugin in &plugins.plugins {
+            let row = self.plugin_row(plugin, plugins.available, window, cx);
+            page = page.child(row);
+        }
+        page
+    }
+
+    fn plugin_row(&mut self, plugin: &Plugin, available: bool, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let theme = *theme(cx);
+        let id = plugin.id;
+        let (edit_focus, toggle_focus, more_focus) = {
+            let focus = self.row_focus(id, cx);
+            (focus.edit.clone(), focus.toggle.clone(), focus.more.clone())
+        };
+        let this = cx.entity().downgrade();
+        let (text, error) = plugin_row_text(plugin);
+        let name = qust_text::shown(&plugin.name);
+        let loading = plugin.status == PluginStatus::Loading;
+        let edit = {
+            let this = this.clone();
+            Button::new(("pluginEdit", id as usize))
+                .label("Edit")
+                .tooltip("Open the plugin\u{2019}s window")
+                .aria_label(format!("Edit {}", plugin.name))
+                .disabled(!available || loading)
+                .focus(&edit_focus)
+                .on_click(move |_, window, cx| {
+                    let _ = this.update(cx, |view, cx| view.services.open_plugin(id, window, cx));
+                })
+        };
+        let toggle = {
+            let this = this.clone();
+            let mut switch = Switch::new(("pluginToggle", id as usize), plugin.enabled, plugin.name.clone()).disabled(!available);
+            if available {
+                switch = switch.focus(&toggle_focus).on_change(move |on, _, cx| {
+                    let _ = this.update(cx, |view, cx| view.services.set_plugin_enabled(id, on, cx));
+                });
+            }
+            switch
+        };
+        let (bounds, probe) = bounds_probe(("pluginMoreBounds", id as usize), window, cx);
+        let more = div().relative().child(probe).child(
+            Button::new(("pluginMore", id as usize))
+                .icon_only(Icon::More)
+                .w(px(32.0))
+                .aria_label(format!("More options for {}", plugin.name))
+                .tooltip("More options")
+                .focus(&more_focus)
+                .on_click(move |_, window, cx| {
+                    let bounds = *bounds.read(cx);
+                    let _ = this.update(cx, |view, cx| view.more_clicked(id, bounds, window, cx));
+                }),
+        );
+        setting_card(&theme)
+            .child(setting_icon(Icon::Plugin, !plugin.enabled || !available, &theme))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .font_text()
+                    .child(div().type_size(14.0, 20.0).text_color(theme.text).when(!plugin.enabled, |d| d.opacity(0.6)).child(line(name).ellipsis().w_full()))
+                    .child(div().type_size(12.0, 16.0).text_color(if error { theme.error } else { theme.text_2 }).child(text)),
+            )
+            .child(div().flex().flex_row().items_center().gap(px(8.0)).child(edit).child(toggle).child(more))
+            .into_any_element()
     }
 
     fn combo(&self, kind: ComboKind, cx: &Context<Self>) -> AnyElement {
@@ -571,7 +954,7 @@ fn group(text: &str, first: bool, theme: &Theme, _: &App) -> gpui::Div {
 }
 
 impl Render for SettingsView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *theme(cx);
         let shortcuts = self.models.shortcuts.read(cx).shortcuts.clone();
         let update = self.models.update.read(cx).update.clone();
@@ -609,7 +992,8 @@ impl Render for SettingsView {
             .child(group("Playback", false, &theme, cx))
             .child(Self::card(Icon::Autoplay, "Play on launch", "Start the last cartridge when Qust opens", false, false, Some(autoplay), &theme, cx))
             .child(Self::card(Icon::Signal, "Reconnect", "How long to keep trying when a stream drops", false, false, Some(self.combo(ComboKind::Reconnect, cx)), &theme, cx))
-            .child(Self::card(Icon::Tray, "Background helper", helper_text, error.is_some(), !available, Some(helper), &theme, cx));
+            .child(Self::card(Icon::Tray, "Background helper", helper_text, error.is_some(), !available, Some(helper), &theme, cx))
+            .child(self.plugins_card(window, cx));
 
         // Global shortcuts
         list = list.child(group("Global shortcuts", false, &theme, cx));
@@ -667,6 +1051,9 @@ impl Render for SettingsView {
             .child(group("About", false, &theme, cx))
             .child(Self::card(Icon::SettingsInfo, "Qust", "Quick streaming player. GPL-3.0-or-later. github.com/mkpascal/qust", false, false, None, &theme, cx));
 
+        if self.page == Page::Plugins {
+            list = self.plugins_page(window, cx);
+        }
         let measured = this.clone();
         div()
             .id("settings-window")

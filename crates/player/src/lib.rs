@@ -18,7 +18,7 @@ mod tests;
 mod visualizer;
 
 pub use accent::accent;
-pub use qust_audio::OutputKind;
+pub use qust_audio::{Effect, EffectSlot, OutputKind};
 pub use store::{electron_config_path, settings_path, Store};
 pub use visualizer::FrameSink;
 
@@ -89,6 +89,12 @@ impl Player {
 
     pub fn attach(&self, frames: FrameSink) -> Value {
         self.call(move |core| core.attach(frames)).unwrap_or(Value::Null)
+    }
+
+    // The processing every engine runs on its mix (the plugins). Takes effect from the next
+    // engine: set it before the player window attaches.
+    pub fn set_effects(&self, effects: Option<std::sync::Arc<qust_audio::EffectSlot>>) {
+        self.cast(move |core| core.effects = effects);
     }
 
     // The player window is gone: stop and let go of every stream.

@@ -2,6 +2,7 @@
 // and never allocates: it takes a new stream list only when it can do so without waiting, reads
 // the rings and atomics, and hands the list it replaced back to be dropped elsewhere.
 
+use crate::effects::EffectSlot;
 use crate::stream::{lock, Stream, IDLE, PLAYING, PRIMING, WAITING};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -30,11 +31,19 @@ pub(crate) struct MixShared {
     volume: AtomicU32,
     balance: AtomicU32,
     pub tap: Arc<Tap>,
+    // The plugins, run on the mix before the tap.
+    pub effects: Option<Arc<EffectSlot>>,
 }
 
 impl MixShared {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(rate: u32) -> MixShared {
+        MixShared::with_effects(rate, None)
+    }
+
+    pub fn with_effects(rate: u32, effects: Option<Arc<EffectSlot>>) -> MixShared {
         MixShared {
+            effects,
             rate,
             pending: Mutex::new(None),
             retired: Mutex::new(None),
@@ -120,6 +129,10 @@ impl Mixer {
         let frames = out.len() / 2;
         for stream in &self.streams {
             self.mix(stream, out, frames);
+        }
+        // The plugins hear the mix before the volume, and the analyzer sees what they made of it.
+        if let Some(effects) = &self.shared.effects {
+            effects.process(out);
         }
         self.shared.tap.write(out);
 

@@ -42,6 +42,7 @@ fn main() {
             codecs: symphonia::default::get_codecs(),
             output: if device { OutputKind::Device } else { OutputKind::Null },
             user_agent: "Qust-test/0.1".to_string(),
+            effects: None,
         },
         move |event| {
             let at = start.elapsed().as_secs_f64();

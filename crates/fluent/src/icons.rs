@@ -59,11 +59,24 @@ pub enum Icon {
     Tray,
     Signal,
     SettingsInfo,
+    // Not in the pages: Settings' audio processing plugins page.
+    /// A card that opens a page (right chevron).
+    Forward,
+    /// Back to the previous page (arrow left).
+    Back,
+    /// "More options" (three dots).
+    More,
+    /// Audio processing: three faders.
+    Plugin,
 }
 
 const SPEAKER: &str = r#"<path d="M7.7 2.7 4.6 5.3H2.8a.8.8 0 0 0-.8.8v3.8c0 .4.4.8.8.8h1.8l3.1 2.6a.5.5 0 0 0 .8-.4V3.1a.5.5 0 0 0-.8-.4z" />"#;
 
 impl Icon {
+    /// The icons the app has beyond the pages' symbols.
+    pub const EXTRA: [Icon; 4] = [Icon::Forward, Icon::Back, Icon::More, Icon::Plugin];
+
+    /// The pages' symbols, in page order (index.html, then settings.html).
     pub const ALL: [Icon; 28] = [
         Icon::Play,
         Icon::Pause,
@@ -126,6 +139,10 @@ impl Icon {
             Icon::Tray => "i-tray",
             Icon::Signal => "i-signal",
             Icon::SettingsInfo => "i-info",
+            Icon::Forward => "i-forward",
+            Icon::Back => "i-back",
+            Icon::More => "i-more",
+            Icon::Plugin => "i-plugin",
         }
     }
 
@@ -160,6 +177,10 @@ impl Icon {
             Icon::Tray => "qust/tray.svg",
             Icon::Signal => "qust/signal.svg",
             Icon::SettingsInfo => "qust/settings-info.svg",
+            Icon::Forward => "qust/forward.svg",
+            Icon::Back => "qust/back.svg",
+            Icon::More => "qust/more.svg",
+            Icon::Plugin => "qust/plugin.svg",
         }
     }
 
@@ -195,6 +216,10 @@ impl Icon {
             Icon::Tray => s(r#"<rect x="2" y="3" width="12" height="10" rx="1.6" fill="none" stroke="black" stroke-width="1.2" /><path d="M2.6 10h3l.9 1.3h3l.9-1.3h3" fill="none" stroke="black" stroke-width="1.2" stroke-linejoin="round" />"#),
             Icon::Signal => s(r#"<circle cx="8" cy="9" r="1.1" /><path d="M5.6 6.6a3.4 3.4 0 0 0 0 4.8M10.4 6.6a3.4 3.4 0 0 1 0 4.8M3.6 4.6a6.2 6.2 0 0 0 0 8.8M12.4 4.6a6.2 6.2 0 0 1 0 8.8" fill="none" stroke="black" stroke-width="1.2" stroke-linecap="round" />"#),
             Icon::SettingsInfo => s(r#"<circle cx="8" cy="8" r="5.8" fill="none" stroke="black" stroke-width="1.2" /><path d="M8 7.3v4" fill="none" stroke="black" stroke-width="1.3" stroke-linecap="round" /><circle cx="8" cy="5.1" r=".85" />"#),
+            Icon::Forward => s(r#"<path d="m6 4 4 4-4 4" fill="none" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />"#),
+            Icon::Back => s(r#"<path d="M13 8H3.5M7.5 4 3.5 8l4 4" fill="none" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />"#),
+            Icon::More => s(r#"<circle cx="3.5" cy="8" r="1.1" /><circle cx="8" cy="8" r="1.1" /><circle cx="12.5" cy="8" r="1.1" />"#),
+            Icon::Plugin => s(r#"<path d="M4 2.5v11M8 2.5v11M12 2.5v11" fill="none" stroke="black" stroke-width="1.2" stroke-linecap="round" /><rect x="2.3" y="8.6" width="3.4" height="2.2" rx=".7" /><rect x="6.3" y="4" width="3.4" height="2.2" rx=".7" /><rect x="10.3" y="6.6" width="3.4" height="2.2" rx=".7" />"#),
         }
     }
 
@@ -204,7 +229,7 @@ impl Icon {
     }
 
     fn by_path(path: &str) -> Option<Icon> {
-        Icon::ALL.into_iter().find(|icon| icon.path() == path)
+        Icon::ALL.into_iter().chain(Icon::EXTRA).find(|icon| icon.path() == path)
     }
 }
 
@@ -322,7 +347,7 @@ impl AssetSource for Assets {
     }
 
     fn list(&self, path: &str) -> gpui::Result<Vec<SharedString>> {
-        Ok(Icon::ALL.iter().filter(|icon| icon.path().starts_with(path)).map(|icon| SharedString::from(icon.path())).collect())
+        Ok(Icon::ALL.iter().chain(&Icon::EXTRA).filter(|icon| icon.path().starts_with(path)).map(|icon| SharedString::from(icon.path())).collect())
     }
 }
 

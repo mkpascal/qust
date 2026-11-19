@@ -70,6 +70,16 @@ impl PanelServices for BridgeServices {
     fn close_window(&self, window: &mut Window, _: &mut App) {
         window.remove_window();
     }
+    // No plugins in this test: the player's own windows only.
+    fn installed_plugins(&self) -> Vec<std::path::PathBuf> {
+        Vec::new()
+    }
+    fn browse_plugins(&self, _: &Window, _: &mut App) {}
+    fn add_plugins(&self, _: Vec<std::path::PathBuf>, _: &mut App) {}
+    fn remove_plugin(&self, _: u64, _: &mut App) {}
+    fn move_plugin(&self, _: u64, _: usize, _: &mut App) {}
+    fn set_plugin_enabled(&self, _: u64, _: bool, _: &mut App) {}
+    fn open_plugin(&self, _: u64, _: &Window, _: &mut App) {}
 }
 
 #[derive(Default, Debug)]

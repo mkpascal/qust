@@ -44,7 +44,7 @@ fn write_wav(name: &str, seconds: f64, rate: u32, sample: impl Fn(u32, u32) -> f
 fn engine() -> (Engine, mpsc::Receiver<(Instant, Event)>) {
     let (send, receive) = mpsc::channel();
     let engine = Engine::new(
-        Config { codecs: symphonia::default::get_codecs(), output: OutputKind::Null, user_agent: "Qust-test".into() },
+        Config { codecs: symphonia::default::get_codecs(), output: OutputKind::Null, user_agent: "Qust-test".into(), effects: None },
         move |event| {
             let _ = send.send((Instant::now(), event));
         },
@@ -200,4 +200,45 @@ fn output_opens_on_load_and_closes_when_idle() {
     while !matches!(next(&events).1, Event::Playing { .. }) {}
     assert!(start.elapsed() < Duration::from_millis(200), "first audio after {:?}", start.elapsed());
     let _ = std::fs::remove_file(path);
+}
+
+// The plugins' slot: told about the engine's rate, run on the mix before the tap.
+#[test]
+fn runs_the_effects_on_the_mix_before_the_tap() {
+    use qust_audio::{Effect, EffectSlot};
+    use std::sync::{Arc, Mutex};
+
+    struct Constant;
+    impl Effect for Constant {
+        fn process(&mut self, stereo: &mut [f32]) {
+            stereo.fill(0.25);
+        }
+    }
+
+    let slot = EffectSlot::new();
+    let rates = Arc::new(Mutex::new(Vec::new()));
+    let heard = rates.clone();
+    slot.on_engine(move |rate| heard.lock().unwrap().push(rate));
+    slot.set(Some(Box::new(Constant)));
+    let (send, events) = mpsc::channel();
+    let engine = Engine::new(
+        Config { codecs: symphonia::default::get_codecs(), output: OutputKind::Null, user_agent: "Qust-test".into(), effects: Some(slot.clone()) },
+        move |event| {
+            let _ = send.send((Instant::now(), event));
+        },
+    );
+    let file = wav("effects", 2.0, 48000);
+    engine.load("a", Source::File(file), None);
+    engine.set_level("a", 1.0);
+    loop {
+        if let (_, Event::Playing { .. }) = next(&events) {
+            break;
+        }
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    let (mut left, mut right) = (vec![0.0; 256], vec![0.0; 256]);
+    assert_eq!(engine.tap().read(0.0, &mut left, &mut right), Some(48000));
+    assert!(left.iter().chain(&right).all(|s| *s == 0.25), "{left:?}");
+    drop(engine);
+    assert_eq!(*rates.lock().unwrap(), [None, Some(48000), None]);
 }

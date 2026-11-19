@@ -58,6 +58,8 @@ pub struct Inner {
     pub log: RefCell<Vec<String>>,
     pub env: Rc<AppEnv>,
     pub services: Rc<AppServices>,
+    /// The audio processing plugins (their own thread; the engines run them).
+    pub plugins: Arc<qust_vst::Plugins>,
 }
 
 struct Global(Rc<Inner>);
@@ -153,6 +155,15 @@ fn start(cx: &mut App, mut config: Config, store: Store, shell: Shell, request: 
     qust_ui::theme::apply(choice, cx);
 
     // Settings written by the Settings window take effect at once (main.rs's store.watch).
+    // The audio processing plugins: every engine the player starts runs them on its mix.
+    let effects = qust_player::EffectSlot::new();
+    let plugin_sender = MainSender::new(cx);
+    let plugins = Arc::new(qust_vst::Plugins::start(store.clone(), effects.clone(), move |snapshot| {
+        plugin_sender.post(move |cx| apply_plugins(snapshot, cx));
+    }));
+    plugins.set_dark(Theme::from_store(&store).is_dark());
+    let _ = bridge.player.ask(move |player| player.set_effects(Some(effects)));
+
     let watcher = bridge.player.clone();
     store.watch(move |key, value| {
         let (key, value) = (key.to_string(), value.cloned());
@@ -202,6 +213,7 @@ fn start(cx: &mut App, mut config: Config, store: Store, shell: Shell, request: 
         log: RefCell::new(Vec::new()),
         env,
         services,
+        plugins,
     });
     cx.set_global(Global(inner.clone()));
 
@@ -264,6 +276,34 @@ fn apply_update(value: Value, cx: &mut App) {
     models.apply_update(parse(value), cx);
 }
 
+// What the plugin thread reports, for Settings.
+fn apply_plugins(snapshot: qust_vst::Snapshot, cx: &mut App) {
+    let plugins = qust_ui::Plugins {
+        available: qust_vst::AVAILABLE,
+        plugins: snapshot
+            .plugins
+            .into_iter()
+            .map(|row| qust_ui::Plugin {
+                id: row.id,
+                name: row.name,
+                vendor: row.vendor,
+                path: row.path.to_string_lossy().to_string(),
+                enabled: row.enabled,
+                status: match row.state {
+                    qust_vst::PluginState::Off => qust_ui::PluginStatus::Off,
+                    qust_vst::PluginState::Loading => qust_ui::PluginStatus::Loading,
+                    qust_vst::PluginState::Ready => qust_ui::PluginStatus::Ready,
+                    qust_vst::PluginState::Failed(error) => qust_ui::PluginStatus::Failed(error),
+                },
+                editor_open: row.editor_open,
+            })
+            .collect(),
+        notice: snapshot.notice,
+    };
+    let models = Bridge::global(cx).models.clone();
+    models.apply_plugins(plugins, cx);
+}
+
 pub(crate) fn apply_background(value: Value, cx: &mut App) {
     let models = Bridge::global(cx).models.clone();
     models.apply_background(parse(value), cx);
@@ -277,6 +317,7 @@ fn handle_event(event: Event, cx: &mut App) {
         // title bars.
         qust_ui::theme::refresh_accent(cx);
         let theme = Theme::from_store(&inner.store);
+        inner.plugins.set_dark(theme.is_dark());
         outside(cx, move || shell_theme::set_app_theme(theme));
         return;
     }
@@ -502,6 +543,8 @@ pub fn quit(cx: &mut App) {
     }
     inner.note("quit");
     inner.bridge.player.detach_and_wait(Duration::from_secs(2));
+    // The engine is gone: the plugins save their settings and go.
+    inner.plugins.shutdown();
     inner.shell.borrow_mut().stop();
     cx.quit();
 }
@@ -512,6 +555,7 @@ pub(crate) fn installed_update(cx: &mut App) {
     let inner = qust(cx);
     inner.quitting.set(true);
     inner.bridge.player.detach_and_wait(Duration::from_secs(2));
+    inner.plugins.shutdown();
     {
         let mut shell = inner.shell.borrow_mut();
         shell.release_instance();

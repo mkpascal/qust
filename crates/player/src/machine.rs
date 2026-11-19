@@ -106,6 +106,8 @@ pub(crate) struct Core {
     player: Player,
     output: OutputKind,
     pub(crate) engine: Option<Engine>,
+    // The plugins' slot, handed to every engine.
+    pub(crate) effects: Option<std::sync::Arc<qust_audio::EffectSlot>>,
     vis: Visualizer,
     attached: bool,
     pub(crate) play_request: bool,
@@ -235,6 +237,7 @@ impl Core {
             player,
             output,
             engine: None,
+            effects: None,
             vis,
             attached: false,
             play_request: false,
@@ -285,7 +288,7 @@ impl Core {
     pub fn attach(&mut self, frames: FrameSink) -> Value {
         if self.engine.is_none() {
             let player = self.player.clone();
-            let config = Config { codecs: qust_codecs::registry(), output: self.output, user_agent: user_agent() };
+            let config = Config { codecs: qust_codecs::registry(), output: self.output, user_agent: user_agent(), effects: self.effects.clone() };
             let engine = Engine::new(config, move |event| player.event(event));
             engine.set_volume(self.volume as f32 / 100.0);
             engine.set_balance(self.balance as f32 / 100.0);

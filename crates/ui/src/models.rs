@@ -13,13 +13,13 @@
 //! | [`PlaylistModel`] | the entries | on `player-playlist`, and per entry on `player-entry` |
 //! | [`StatusModel`] | `player-status` | every second and on changes |
 //! | [`SettingsModel`] | the settings the windows show | on `settings-changed` and local writes |
-//! | [`ShortcutsModel`], [`UpdateModel`], [`BackgroundModel`] | | when they change |
+//! | [`ShortcutsModel`], [`UpdateModel`], [`BackgroundModel`], [`PluginsModel`] | | when they change |
 //!
 //! A view keeps the `Entity` it shows and observes it (`cx.observe(&models.clock, |_, _, cx|
 //! cx.notify())`), and reads it in `render` (`self.clock.read(cx)`). Views never write models;
 //! the bridge does, on the UI thread.
 
-use crate::model::{Background, Cartridge, Entry, Playback, PlayerState, Playlist, Shortcuts, Status, UpdateStatus};
+use crate::model::{Background, Cartridge, Entry, Playback, PlayerState, Playlist, Plugins, Shortcuts, Status, UpdateStatus};
 use gpui::{App, AppContext, Entity};
 use qust_fluent::analyzer::{Colors, Frame, BLANK};
 use std::collections::HashMap;
@@ -164,6 +164,11 @@ pub struct BackgroundModel {
     pub background: Background,
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PluginsModel {
+    pub plugins: Plugins,
+}
+
 /// Every model, created once per app (the player has one state for all windows). Cheap to
 /// clone (entity handles).
 #[derive(Clone)]
@@ -181,6 +186,7 @@ pub struct Models {
     pub shortcuts: Entity<ShortcutsModel>,
     pub update: Entity<UpdateModel>,
     pub background: Entity<BackgroundModel>,
+    pub plugins: Entity<PluginsModel>,
 }
 
 /// Replaces `target` with `value` and notifies, only when they differ.
@@ -211,6 +217,7 @@ impl Models {
             shortcuts: cx.new(|_| ShortcutsModel::default()),
             update: cx.new(|_| UpdateModel::default()),
             background: cx.new(|_| BackgroundModel::default()),
+            plugins: cx.new(|_| PluginsModel::default()),
         }
     }
 
@@ -304,6 +311,10 @@ impl Models {
 
     pub fn apply_background(&self, background: Background, cx: &mut App) {
         set(&self.background, BackgroundModel { background }, cx);
+    }
+
+    pub fn apply_plugins(&self, plugins: Plugins, cx: &mut App) {
+        set(&self.plugins, PluginsModel { plugins }, cx);
     }
 
     pub fn apply_settings(&self, settings: SettingsModel, cx: &mut App) {

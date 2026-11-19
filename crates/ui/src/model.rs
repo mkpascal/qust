@@ -233,6 +233,38 @@ impl UpdateStatus {
     }
 }
 
+/// The audio processing plugins (VST3), as `qust_vst` reports them.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Plugins {
+    /// Plugins can run here (Windows).
+    pub available: bool,
+    /// In processing order, top to bottom.
+    pub plugins: Vec<Plugin>,
+    /// Why the last thing asked for didn't work ("Couldn't add …").
+    pub notice: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Plugin {
+    /// Lasts as long as the app runs.
+    pub id: u64,
+    pub name: String,
+    pub vendor: String,
+    pub path: String,
+    pub enabled: bool,
+    pub status: PluginStatus,
+    pub editor_open: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum PluginStatus {
+    /// Not running (off, or nothing plays through it yet).
+    Off,
+    Loading,
+    Ready,
+    Failed(String),
+}
+
 /// The background helper (`get_background`).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]

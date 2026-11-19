@@ -13,6 +13,7 @@ use qust_ui::{Background, StreamInfo};
 use serde_json::Value;
 use std::any::Any;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 
 /// What a pending stream-details request resolves to (None when the player went away).
@@ -89,4 +90,29 @@ pub trait PanelServices {
     /// Closes the panel (Esc). With the bridge: `window.remove_window()`; the app's close handler
     /// runs as for the close button.
     fn close_window(&self, window: &mut Window, cx: &mut App);
+
+    /* Audio processing plugins: the list itself comes from `models.plugins` */
+
+    /// The VST3 plugins installed in the system's folders, for the Add menu
+    /// (`qust_vst::installed()`: names only, nothing loaded).
+    fn installed_plugins(&self) -> Vec<PathBuf>;
+
+    /// "Browse…": the file picker for `.vst3` files, owned by `window`, on a thread of its own;
+    /// what is picked is added.
+    fn browse_plugins(&self, window: &Window, cx: &mut App);
+
+    /// Adds plugins at the end of the list (`qust_vst::Plugins::add`).
+    fn add_plugins(&self, paths: Vec<PathBuf>, cx: &mut App);
+
+    /// Removes a plugin and its settings.
+    fn remove_plugin(&self, id: u64, cx: &mut App);
+
+    /// Moves a plugin to `index` in the processing order.
+    fn move_plugin(&self, id: u64, index: usize, cx: &mut App);
+
+    /// Turns a plugin on or off (remembered).
+    fn set_plugin_enabled(&self, id: u64, enabled: bool, cx: &mut App);
+
+    /// Opens the plugin's own window, centered over `window`.
+    fn open_plugin(&self, id: u64, window: &Window, cx: &mut App);
 }
