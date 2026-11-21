@@ -390,6 +390,32 @@ fn attach_gives_the_snapshot_then_events_and_frames() {
     assert!(rig.events("player-status").iter().any(|status| status["state"] == "playing"));
 }
 
+// Playing a stream again shows "Connecting…" and then the new connection's title, never the title
+// the previous connection under the same URL left behind.
+#[test]
+fn a_new_connection_never_shows_the_old_title() {
+    let server = Server::start(|_, n| Plan::Live { burst: 1.0, title: Some(if n == 1 { "Old Song" } else { "New Song" }), gap: None, drop_after: None });
+    let rig = Rig::new("old-title", json!({ "player1-title": "Radio", "player1-url": server.url("/live") }));
+    rig.attach();
+    rig.call(|core| core.select_slot(0));
+    rig.wait(6.0, "the first title", |state| state["title"] == "Old Song");
+    rig.call(|core| core.stop());
+    // Stopped long enough for the next poll to have happened, were the details still there.
+    sleep(2.5);
+    rig.call(|core| core.play());
+    let start = Instant::now();
+    loop {
+        let state = rig.state();
+        assert_ne!(state["title"], "Old Song", "the old title came back");
+        if state["title"] == "New Song" {
+            break;
+        }
+        assert!(start.elapsed().as_secs_f64() < 6.0, "waited for the new title; state: {state:#}");
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(server.count("/live"), 2);
+}
+
 #[test]
 fn cartridge_play_pause_resume_stop() {
     let server = Server::start(|_, _| Plan::Live { burst: 1.0, title: Some("Artist - Song"), gap: None, drop_after: None });

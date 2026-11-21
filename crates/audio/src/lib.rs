@@ -205,6 +205,7 @@ impl Engine {
     pub fn load(&self, key: &str, source: Source, start_at: Option<f64>) -> StreamId {
         let inner = &self.inner;
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        info::reset(key, id);
         let seconds = if matches!(source, Source::File(_)) { FILE_SECONDS } else { STREAM_SECONDS };
         let stream = Arc::new(Stream::new(id, key, seconds * inner.rate as usize, inner.rate));
         if let Some(at) = start_at.filter(|at| *at > 0.0) {

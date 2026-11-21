@@ -506,6 +506,8 @@ impl Core {
                 self.waiting_until = None;
                 self.skips = 0;
                 self.set_state(State::Playing);
+                // The title the connection has sent by now, rather than at the next poll.
+                self.start_info();
             }
             // The buffer ran out. A file downloading slower than it plays just waits; a live stream
             // gets STALL_TIMEOUT to come back before it reconnects.

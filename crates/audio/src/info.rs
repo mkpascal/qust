@@ -84,6 +84,15 @@ fn infos() -> MutexGuard<'static, HashMap<String, Info>> {
     INFOS.get_or_init(Default::default).lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// A new stream under `key` (not yet connected): the previous connection's details, its title
+// above all, no longer describe what will play. Only the connection count is kept, and the
+// previous stream's thread, still winding down, can no longer change them.
+pub(crate) fn reset(key: &str, owner: u64) {
+    let mut infos = infos();
+    let connections = infos.get(key).map_or(0, |info| info.connections);
+    infos.insert(key.to_string(), Info { owner, connections, ..Default::default() });
+}
+
 // Starts the details of a new connection under `key`, keeping the connection count.
 pub(crate) fn begin(key: &str, owner: u64, info: Info) {
     let mut infos = infos();
