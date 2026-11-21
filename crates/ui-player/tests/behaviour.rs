@@ -66,7 +66,7 @@ impl Rig {
     }
 
     fn at_frac(&self, name: &str, fx: f32, fy: f32) -> Point<f32> {
-        let b = element_box(&self.layout, name, 1.0).unwrap_or_else(|| panic!("no element {name} in the layout"));
+        let b = testing::slider_box(name).or_else(|| element_box(&self.layout, name, 1.0)).unwrap_or_else(|| panic!("no element {name} in the layout"));
         point(b[0] + fx * b[2], b[1] + fy * b[3])
     }
 
@@ -336,9 +336,10 @@ fn sliders(cx: &mut AsyncApp) -> LocalBoxFuture<'_, Result<(), String>> {
         let shown = rig.read(|v, cx| v.sliders().read(cx).volume.shown);
         check!(shown == 55 && rig.commands().is_empty(), "player value after the drag: {shown} {:?}", rig.commands());
         // Beyond the rail: clamped.
-        rig.press(point(64.0, 133.0));
-        rig.move_held(point(400.0, 133.0));
-        rig.release(point(400.0, 133.0));
+        let left = rig.at_frac("#volumeSlider", 0.0, 0.5);
+        rig.press(point(left.x + 1.0, left.y));
+        rig.move_held(point(400.0, left.y));
+        rig.release(point(400.0, left.y));
         check!(rig.commands().first() == Some(&Command::SetVolume(0)) && rig.commands().last() == Some(&Command::SetVolume(100)), "clamped: {:?}", rig.commands());
 
         // Wheel: ±5 % of the span.

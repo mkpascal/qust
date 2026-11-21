@@ -143,7 +143,7 @@ fn main() {
         cx.spawn(async move |cx: &mut AsyncApp| {
             let reference = layout("player", "stopped").unwrap_or_default();
             let at = |name: &str, fx: f32| -> Point<f32> {
-                let b = element_box(&reference, name, 1.0).unwrap_or([0.0; 4]);
+                let b = qust_ui_player::testing::slider_box(name).or_else(|| element_box(&reference, name, 1.0)).unwrap_or([0.0; 4]);
                 point(b[0] + fx * b[2], b[1] + b[3] / 2.0)
             };
             let mut out = Outcome::default();

@@ -266,6 +266,8 @@ async fn script(cx: &mut AsyncApp, out: &Rc<RefCell<Outcome>>, menus: &Rc<RefCel
     click(cx, at("#cartridges>.cartridge[0]>.cartridge-body"));
     let playing = until(cx, 15.0, |cx| state(cx) == Playback::Playing).await;
     let titled = until(cx, 10.0, |cx| qust(cx).bridge.models.now.read(cx).title == "Test title").await;
+    // The title shows as soon as the stream plays: give the analyzer its own time.
+    until(cx, 5.0, |cx| qust(cx).bridge.models.analyzer.read(cx).received > 10).await;
     let frames = cx.update(|cx| qust(cx).bridge.models.analyzer.read(cx).received);
     check("a click on the cartridge plays it; its ICY title shows; analyzer frames arrive", playing && titled && frames > 10, format!("playing {playing}, title {titled}, frames {frames}"));
 

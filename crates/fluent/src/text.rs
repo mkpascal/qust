@@ -427,6 +427,9 @@ pub struct LinePrepaint {
     shaped: ShapedLine,
     /// Glyph index → character number, for letter-spacing.
     chars: Vec<usize>,
+    /// Each run's end (byte offset) and color: letter-spaced text is painted glyph by glyph, each
+    /// in its run's color (highlights, selection).
+    colors: Vec<(usize, gpui::Hsla)>,
     x: f32,
 }
 
@@ -503,11 +506,18 @@ impl Element for Line {
                 run.color = color.into();
             }
         }
+        let colors = runs
+            .iter()
+            .scan(0, |end, run| {
+                *end += run.len;
+                Some((*end, run.color))
+            })
+            .collect();
         let shaped = system.shape_line(shown.clone(), px(state.size), &runs, None);
         let chars: Vec<usize> = if self.spacing != 0.0 { shown.char_indices().map(|(i, _)| i).collect() } else { Vec::new() };
         let width = shaped.width.as_f32() + self.spacing * shown.chars().count() as f32;
         let x = if self.end { available - width } else { 0.0 } + self.translate;
-        Some(LinePrepaint { shaped, chars, x })
+        Some(LinePrepaint { shaped, chars, colors, x })
     }
 
     fn paint(
@@ -548,6 +558,7 @@ impl Element for Line {
                 for glyph in &run.glyphs {
                     let n = prepared.chars.iter().position(|i| *i == glyph.index).unwrap_or(0) as f32;
                     let origin = point(px(x) + glyph.position.x + px(n * spacing), px(baseline) + glyph.position.y);
+                    let color = prepared.colors.iter().find(|(end, _)| glyph.index < *end).map_or(color, |(_, color)| *color);
                     let _ = if glyph.is_emoji {
                         window.paint_emoji(origin, run.font_id, glyph.id, font_size)
                     } else {

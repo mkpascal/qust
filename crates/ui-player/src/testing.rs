@@ -305,6 +305,17 @@ pub fn layout_name(selector: &str) -> String {
     name
 }
 
+/// The volume and balance sliders' box by layout name (`#volumeSlider>.slider-rail`), for every
+/// fixture: the frozen page put volume over balance for a stream, Qust now lays them out side by
+/// side for everything, as the page did for a file (measured in `seek-middle`). None for other
+/// elements.
+pub fn slider_box(name: &str) -> Option<[f32; 4]> {
+    if !["#volume", "#balance"].iter().any(|prefix| name.starts_with(prefix)) {
+        return None;
+    }
+    element_box(&layout("player", "seek-middle")?, name, 1.0)
+}
+
 /// Where an action's target is: the element's box, `fx` / `fy` across it (default the middle),
 /// plus `dx` / `dy`.
 fn target_point(layout: &Value, target: &Value) -> Option<Point<f32>> {
@@ -321,7 +332,7 @@ fn target_point(layout: &Value, target: &Value) -> Option<Point<f32>> {
     };
     let name = layout_name(&selector);
     // A bare class (`.transport`) is named by its path in the layout (`body>.app>.player>.transport`).
-    let b = element_box(layout, &name, 1.0).or_else(|| {
+    let b = slider_box(&name).or_else(|| element_box(layout, &name, 1.0)).or_else(|| {
         let suffix = format!(">{name}");
         let found = layout["elements"].as_array()?.iter().find(|e| e["name"].as_str().is_some_and(|n| n.ends_with(&suffix)))?;
         element_box(layout, found["name"].as_str()?, 1.0)
