@@ -1,8 +1,11 @@
-//! The sliders island (`#sliders`, BEHAVIOUR.md 2.3): volume over balance for a stream; for a
-//! file with a duration, the seek row on top and volume and balance side by side.
+//! The sliders island (`#sliders`, BEHAVIOUR.md 2.3): the seek row on top, volume and balance
+//! side by side under it. The frozen page put volume over balance for a stream; Qust now gives a
+//! stream the file's layout, so nothing moves when switching, with a line saying LIVE where a
+//! file's seek bar is.
 //!
-//! The seek row changes four times a second while a file plays, so it is a live layer
-//! ([`SeekView`]) drawn in a slot this view leaves for it.
+//! The seek row changes four times a second while a file plays, and the LIVE label animates
+//! while a stream plays, so the row is a live layer ([`SeekView`]) drawn in a slot this view
+//! leaves for it.
 //!
 //! **Values.** `qust_fluent::Slider` shows the player's value unless the user is dragging it,
 //! and reports only the user's changes (`on_input`), so nothing echoes back as a command. The
@@ -12,9 +15,12 @@
 
 use crate::view::{forced, Shared};
 use gpui::{div, prelude::*, px, Context, Entity, FocusHandle, IntoElement, Render, Window};
+use qust_fluent::motion::{live_breathe_opacity, live_wave, motion};
+use qust_fluent::text::spaced_text;
 use qust_fluent::{icon, line, surface, theme, Frame, Icon, Slider, SliderSize, TextStyles};
-use qust_ui::{format, portal_slot};
+use qust_ui::{format, portal_slot, Playback};
 use std::rc::Rc;
+use std::time::Instant;
 
 pub use qust_fluent::Mirror;
 
@@ -51,7 +57,6 @@ pub struct SlidersView {
     shared: Rc<Shared>,
     pub volume: Mirror,
     pub balance: Mirror,
-    seekable: bool,
     volume_focus: FocusHandle,
     balance_focus: FocusHandle,
     pub renders: u64,
@@ -68,21 +73,11 @@ impl SlidersView {
             cx.notify();
         })
         .detach();
-        cx.observe(&shared.models.seek, |this: &mut SlidersView, seek, cx| {
-            let seekable = seekable_layout(seek.read(cx).duration);
-            if seekable != this.seekable {
-                this.seekable = seekable;
-                cx.notify();
-            }
-        })
-        .detach();
         let levels = shared.models.levels.read(cx).clone();
-        let seekable = seekable_layout(shared.models.seek.read(cx).duration);
         SlidersView {
             shared,
             volume: Mirror::new(levels.volume.clamp(0, 100)),
             balance: Mirror::new(levels.balance.clamp(-100, 100)),
-            seekable,
             volume_focus: qust_fluent::focus::tab_stop(cx),
             balance_focus: qust_fluent::focus::tab_stop(cx),
             renders: 0,
@@ -98,16 +93,17 @@ impl SlidersView {
     }
 }
 
-/// A `.slider-row`: icon, slider, value.
-fn row(icon_name: Icon, slider: impl IntoElement, value: String, pair: bool, cx: &gpui::App) -> impl IntoElement {
+/// A `.slider-row` of the pair: icon, slider, value.
+fn row(icon_name: Icon, slider: impl IntoElement, value: String, cx: &gpui::App) -> impl IntoElement {
     let theme = theme(cx);
-    let (icon_size, value_width, value_size, gap) = if pair { (14.0, 30.0, 11.0, 4.0) } else { (16.0, 34.0, 12.0, 10.0) };
+    let (icon_size, value_width, value_size, gap) = (14.0, 30.0, 11.0, 4.0);
     div()
         .flex()
         .items_center()
         .gap(px(gap))
         .h(px(28.0))
-        .when(pair, |r| r.flex_1().min_w_0())
+        .flex_1()
+        .min_w_0()
         .child(icon(icon_name, icon_size).text_color(theme.text_2))
         .child(slider)
         .child(
@@ -129,10 +125,9 @@ impl Render for SlidersView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.renders += 1;
         let theme = *theme(cx);
-        let pair = self.seekable;
         let levels = self.shared.models.levels.read(cx).clone();
         let this = cx.entity().downgrade();
-        let size = if pair { SliderSize::Pair } else { SliderSize::Regular };
+        let size = SliderSize::Pair;
 
         let slider_box = |id: &'static str, slider: Slider| div().flex_1().min_w_0().child(slider.w_full()).id(id);
 
@@ -192,8 +187,8 @@ impl Render for SlidersView {
                 });
             });
 
-        let volume_row = row(volume_icon(self.volume.shown), slider_box("volume-wrap", volume), format!("{}%", self.volume.shown), pair, cx);
-        let balance_row = row(Icon::Balance, slider_box("balance-wrap", balance), format::balance(self.balance.shown), pair, cx);
+        let volume_row = row(volume_icon(self.volume.shown), slider_box("volume-wrap", volume), format!("{}%", self.volume.shown), cx);
+        let balance_row = row(Icon::Balance, slider_box("balance-wrap", balance), format::balance(self.balance.shown), cx);
         let root = self.shared.root.clone();
 
         surface(Frame::island(&theme))
@@ -203,16 +198,20 @@ impl Render for SlidersView {
             .gap(px(4.0))
             .py(px(9.0))
             .px(px(14.0))
-            .when(pair, |s| s.child(div().w_full().h(px(28.0)).flex_none().child(portal_slot(root, "seek"))))
-            .child(div().flex().when(pair, |p| p.flex_row().gap(px(14.0))).when(!pair, |p| p.flex_col().gap(px(4.0))).child(volume_row).child(balance_row))
+            .child(div().w_full().h(px(28.0)).flex_none().child(portal_slot(root, "seek")))
+            .child(div().flex().flex_row().gap(px(14.0)).child(volume_row).child(balance_row))
     }
 }
 
-/// The seek row (`.seek-row`) as a live layer: the seek bar and "pos / dur".
+/// The seek row (`.seek-row`) as a live layer: the seek bar and "pos / dur" for a file, the
+/// LIVE line for a stream, a plain line otherwise (nothing loaded, a file whose length isn't
+/// known yet).
 pub struct SeekView {
     shared: Rc<Shared>,
     pub mirror: Mirror,
     focus: FocusHandle,
+    /// When the stream started playing: the LIVE label's animation runs from there.
+    playing_since: Option<Instant>,
     pub renders: u64,
 }
 
@@ -221,14 +220,19 @@ impl SeekView {
         cx.observe(&shared.models.seek, |this: &mut SeekView, seek, cx| {
             let seek = seek.read(cx);
             this.mirror.owner(seek_value(seek.duration, seek.position, seek.seekable));
+            let playing = seek.state == Playback::Playing;
+            if playing != this.playing_since.is_some() {
+                this.playing_since = playing.then(Instant::now);
+            }
             cx.notify();
         })
         .detach();
         let seek = shared.models.seek.read(cx).clone();
+        let playing_since = (seek.state == Playback::Playing).then(Instant::now);
         // Before everything else in the Tab order, as the first control in the page: the row is
         // painted after the window's content (it is a live layer), so it sorts by index.
         let focus = cx.focus_handle().tab_index(-1).tab_stop(true);
-        SeekView { shared, mirror: Mirror::new(seek_value(seek.duration, seek.position, seek.seekable)), focus, renders: 0 }
+        SeekView { shared, mirror: Mirror::new(seek_value(seek.duration, seek.position, seek.seekable)), focus, playing_since, renders: 0 }
     }
 
     pub fn focus_handle(&self) -> &FocusHandle {
@@ -236,13 +240,58 @@ impl SeekView {
     }
 }
 
+impl SeekView {
+    /// A stream's line: the rail broken around LIVE, dimmed unless playing. While playing, the
+    /// label breathes (1 to 0.6) and the accent runs through its letters (`motion::live_*`).
+    /// Without `live`, the rail alone. Not a control: no focus, no pointer handling.
+    fn live_line(&self, live: bool, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = *theme(cx);
+        let motion = motion(cx);
+        let elapsed = self.playing_since.filter(|_| live && !motion.reduced).map(|since| motion.elapsed(since, None));
+        if elapsed.is_some() && motion.wants_frames() {
+            window.request_animation_frame();
+        }
+        let rail = || div().flex_1().min_w_0().h(px(4.0)).rounded(px(2.0)).bg(theme.slider_track);
+        let text = "LIVE";
+        let mut label = spaced_text(text, 10.0 * 0.08);
+        if let Some(elapsed) = elapsed {
+            for letter in 0..text.len() {
+                let color = theme.text_2.lerp(theme.accent, live_wave(elapsed, letter) as f32);
+                label = label.highlight(letter..letter + 1, gpui::HighlightStyle { color: Some(color.into()), ..Default::default() });
+            }
+        }
+        let label = div()
+            .flex_none()
+            .font_text()
+            .type_size(10.0, 14.0)
+            .semibold()
+            .text_color(theme.text_2)
+            .opacity(elapsed.map_or(1.0, |elapsed| live_breathe_opacity(elapsed) as f32))
+            .child(label);
+        div().size_full().flex().items_center().child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .h(px(24.0))
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .pl(px(8.0))
+                .pr(px(10.0))
+                .when(self.playing_since.is_none(), |line| line.opacity(0.5))
+                .child(rail())
+                .when(live, |line| line.child(label).child(rail())),
+        )
+    }
+}
+
 impl Render for SeekView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.renders += 1;
         let theme = *theme(cx);
         let seek = self.shared.models.seek.read(cx).clone();
         let Some(duration) = seek.duration.filter(|_| seekable_layout(seek.duration)) else {
-            return div().size_full().into_any_element();
+            return self.live_line(seek.live, window, cx).into_any_element();
         };
         let value = seek_value(seek.duration, seek.position, seek.seekable);
         let this = cx.entity().downgrade();

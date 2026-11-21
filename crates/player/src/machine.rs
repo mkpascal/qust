@@ -865,6 +865,8 @@ impl Core {
         let finite = current.as_ref().and_then(|(_, status)| status.duration);
         let entry_duration = self.active_entry.and_then(|id| self.entry(id)).and_then(|entry| entry.duration);
         let seekable = !stopped && finite.is_some();
+        // A stream: the seek bar's place says LIVE. Not a local file, even before its length is known.
+        let live = self.active().is_some_and(|source| source.path.is_none()) && finite.or(entry_duration).is_none();
         json!({
             "state": self.state.name(),
             "cartridges": cartridges,
@@ -884,6 +886,7 @@ impl Core {
             "duration": finite.or(entry_duration),
             "position": current.filter(|_| seekable).map(|(_, status)| status.position),
             "seekable": seekable,
+            "live": live,
         })
     }
 

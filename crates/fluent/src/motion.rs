@@ -15,7 +15,7 @@
 //!
 //! Reduced motion (Windows "Animation effects" off) removes the animations the CSS removes under
 //! `prefers-reduced-motion: reduce` — marquee, equalizers, the preloading bolt, "dropped", the
-//! dialog opening — but not the transitions (slider dot, toggle thumb, chevron).
+//! dialog opening, and the LIVE label added since — but not the transitions (slider dot, toggle thumb, chevron).
 
 use gpui::{App, Global};
 use std::time::{Duration, Instant};
@@ -123,6 +123,11 @@ pub mod timing {
     pub const CHEVRON: Duration = Duration::from_millis(200);
     pub const TOGGLE_THUMB: Duration = Duration::from_millis(150);
     pub const TOGGLE_WIDTH: Duration = Duration::from_millis(100);
+    /// The LIVE label (not in the frozen page): the whole label breathes, 1.5 s alternate...
+    pub const LIVE_BREATHE: Duration = Duration::from_millis(1500);
+    /// ...while the accent runs through its letters, one every 150 ms, each cycle 2 s.
+    pub const LIVE_WAVE: Duration = Duration::from_millis(2000);
+    pub const LIVE_WAVE_STEP: Duration = Duration::from_millis(150);
 }
 
 /// An infinite `alternate` animation's directed progress (0–1) after `elapsed`, before easing.
@@ -181,6 +186,27 @@ pub fn equalizer_scale(elapsed: Duration, bar: usize) -> f64 {
 /// The preloading bolt's opacity (0.15 → 0.6, 0.8 s ease-in-out alternate).
 pub fn preloading_opacity(elapsed: Duration) -> f64 {
     0.15 + 0.45 * EASE_IN_OUT.ease(alternate(elapsed, timing::PRELOADING))
+}
+
+/// The LIVE label's opacity (1 → 0.6, `LIVE_BREATHE` ease-in-out alternate).
+pub fn live_breathe_opacity(elapsed: Duration) -> f64 {
+    1.0 - 0.4 * EASE_IN_OUT.ease(alternate(elapsed, timing::LIVE_BREATHE))
+}
+
+/// How much of the accent letter `letter` (0–3) of the LIVE label shows (0: the label's grey,
+/// 1: the accent): keyframes `0%, 40%, 100% { grey } 20% { accent }`, ease-in-out between them,
+/// `LIVE_WAVE` long, each letter `LIVE_WAVE_STEP` later than the one before (grey until it starts).
+pub fn live_wave(elapsed: Duration, letter: usize) -> f64 {
+    let Some(t) = elapsed.checked_sub(timing::LIVE_WAVE_STEP * letter as u32) else { return 0.0 };
+    let period = timing::LIVE_WAVE.as_secs_f64();
+    let p = (t.as_secs_f64() / period).fract();
+    if p < 0.2 {
+        EASE_IN_OUT.ease(p / 0.2)
+    } else if p < 0.4 {
+        1.0 - EASE_IN_OUT.ease((p - 0.2) / 0.2)
+    } else {
+        0.0
+    }
 }
 
 /// `dropped`: scale 0.94 → 1 over 0.25 s, Fluent easing.

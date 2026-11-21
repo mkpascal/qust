@@ -41,6 +41,17 @@ impl Color {
         Color { a: self.a * p, ..self }
     }
 
+    /// `t` of the way from `self` to `to`, as a CSS animation interpolates colors: in sRGB,
+    /// premultiplied by alpha.
+    pub fn lerp(self, to: Color, t: f32) -> Color {
+        let a = self.a + (to.a - self.a) * t;
+        if a <= 0.0 {
+            return Color::TRANSPARENT;
+        }
+        let channel = |from: f32, end: f32| (from * self.a + (end * to.a - from * self.a) * t) / a;
+        Color { r: channel(self.r, to.r), g: channel(self.g, to.g), b: channel(self.b, to.b), a }
+    }
+
     /// The same color at another alpha.
     pub fn alpha(self, a: f32) -> Color {
         Color { a, ..self }

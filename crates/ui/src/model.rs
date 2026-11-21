@@ -76,6 +76,8 @@ pub struct PlayerState {
     pub duration: Option<f64>,
     pub position: Option<f64>,
     pub seekable: bool,
+    /// A stream (not a local file, no known length): the seek bar's place says LIVE.
+    pub live: bool,
 }
 
 impl PlayerState {

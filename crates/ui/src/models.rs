@@ -37,6 +37,7 @@ pub struct Seek {
     pub duration: Option<f64>,
     pub position: Option<f64>,
     pub seekable: bool,
+    pub live: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -225,7 +226,7 @@ impl Models {
     /// part and is notified only if that part changed.
     pub fn apply_state(&self, state: PlayerState, cx: &mut App) {
         set(&self.clock, Clock { state: state.state, seconds: state.clock_seconds() }, cx);
-        set(&self.seek, Seek { state: state.state, duration: state.duration, position: state.position, seekable: state.seekable }, cx);
+        set(&self.seek, Seek { state: state.state, duration: state.duration, position: state.position, seekable: state.seekable, live: state.live }, cx);
         set(
             &self.now,
             NowPlaying {

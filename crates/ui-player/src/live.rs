@@ -6,7 +6,7 @@
 //! | `analyzer` | `qust_ui::AnalyzerView` | every frame from the player (≤ 60 Hz) |
 //! | `clock` | [`ClockView`] | once a second while playing, on state changes |
 //! | `title` | `qust_fluent::Marquee` | on title changes; animates while it scrolls |
-//! | `seek` | [`crate::sliders::SeekView`] | four times a second while a file plays |
+//! | `seek` | [`crate::sliders::SeekView`] | four times a second while a file plays; every frame while a stream plays (the LIVE label) |
 //! | `badge-0` … `badge-5` | [`crate::cartridges::BadgeView`] | the equalizer and the pulsing bolt animate |
 
 use crate::display::{clock_text, CLOCK_IDLE};
